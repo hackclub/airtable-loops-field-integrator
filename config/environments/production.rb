@@ -50,7 +50,6 @@ Rails.application.configure do
   config.cache_store = :solid_cache_store
 
   config.active_job.queue_adapter = :good_job
-  config.good_job.execution_mode = :async
 
   # Ignore bad email addresses and do not raise email delivery errors.
   # Set this to true and configure the email server for immediate delivery to raise delivery errors.
