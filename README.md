@@ -15,6 +15,6 @@ Example: `WEBHOOK_BASE_URL=https://airtable-loops-integrator.hackclub.com`
 ## To Do
 
 - [ ] Write to Airtable on field change
-- [ ] Concurrency controls
+- [x] Concurrency controls
 - [ ] Graceful error handling that displays to user
 - [ ] Descriptive README

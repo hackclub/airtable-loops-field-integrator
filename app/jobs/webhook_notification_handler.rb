@@ -1,4 +1,11 @@
 class WebhookNotificationHandler < ApplicationJob
+  include GoodJob::ActiveJobExtensions::Concurrency
+
+  good_job_control_concurrency_with(
+    perform_throttle: [1, 1.second],
+    key: -> { "airtable_api/#{arguments.first}"}
+  )
+
   def perform(base_id, webhook_id, timestamp)
     w = Webhook.find_by(id: webhook_id)
     if w.nil?
