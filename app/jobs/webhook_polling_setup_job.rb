@@ -8,7 +8,7 @@ class WebhookPollingSetupJob < ApplicationJob
 
       Webhook.create!(
         base_id: base['id'],
-        notification_url: 'https://c77848ff3f80.ngrok.app/airtable/webhook',
+        notification_url: "#{ENV.fetch('WEBHOOK_BASE_URL')}/airtable/webhook",
         specification: {
           options: {
             filters: {
