@@ -15,15 +15,15 @@ class WebhookPayloadHandlerJob < ApplicationJob
       fieldValues[table_id] = {}
 
       # Handle changed records
-        if table_data["changedRecordsById"]
+      if table_data["changedRecordsById"]
         table_data["changedRecordsById"].each do |record_id, record_data|
           # Get the current (changed) values
           current_values = record_data["current"]["cellValuesByFieldId"]
           changes[table_id][record_id] = current_values
 
           # Store all field values
-          fieldValues[table_id][record_id] = record_data["current"]["cellValuesByFieldId"]
-          fieldValues[table_id][record_id].merge!(record_data["unchanged"]["cellValuesByFieldId"])
+          fieldValues[table_id][record_id] = record_data.dig("current", "cellValuesByFieldId") || {}
+          fieldValues[table_id][record_id].merge!(record_data.dig("unchanged", "cellValuesByFieldId") || {})
         end
       end
 
