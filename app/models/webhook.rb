@@ -8,6 +8,19 @@ class Webhook < ApplicationRecord
   scope :unexpired, -> { where('expiration_time > ?', Time.current) }
   scope :for_base, ->(base_id) { where(base_id: base_id) }
 
+  def refresh!
+    response = AirtableService::Webhooks.refresh(
+      base_id: base_id,
+      webhook_id: id
+    )
+
+    if response["expirationTime"]
+      update!(expiration_time: Time.parse(response["expirationTime"]))
+    else
+      raise "Webhook refresh failed: No expiration time received"
+    end
+  end
+
   private
 
   def create_webhook_in_airtable

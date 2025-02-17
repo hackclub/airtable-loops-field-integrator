@@ -84,5 +84,10 @@ class AirtableService
       url = "#{API_URL}/bases/#{base_id}/webhooks/#{webhook_id}"
       AirtableService.delete(url)
     end
+
+    def self.refresh(base_id:, webhook_id:)
+      url = "#{API_URL}/bases/#{base_id}/webhooks/#{webhook_id}/refresh"
+      AirtableService.post(url, nil)
+    end
   end
 end
