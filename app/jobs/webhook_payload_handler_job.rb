@@ -21,6 +21,7 @@ class WebhookPayloadHandlerJob < ApplicationJob
           current_values = record_data["current"]["cellValuesByFieldId"]
           changes[table_id][record_id] = current_values
 
+          # Store all field values
           fieldValues[table_id][record_id] = record_data["current"]["cellValuesByFieldId"]
           fieldValues[table_id][record_id].merge!(record_data["unchanged"]["cellValuesByFieldId"])
         end
@@ -32,6 +33,9 @@ class WebhookPayloadHandlerJob < ApplicationJob
           # Get the cell values
           cell_values = record_data["cellValuesByFieldId"]
           changes[table_id][record_id] = cell_values
+
+          # Store all field values
+          fieldValues[table_id][record_id] = cell_values
         end
       end
 
