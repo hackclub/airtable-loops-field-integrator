@@ -1,4 +1,6 @@
 class Webhook < ApplicationRecord
+  include GlobalID::Identification
+
   validates :base_id, :notification_url, :specification, presence: true
   validates :id, :mac_secret_base64, :expiration_time, presence: true, on: :update
 

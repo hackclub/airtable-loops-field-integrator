@@ -41,5 +41,14 @@ module App
 
     # Use GoodJob as the queue adapter
     config.active_job.queue_adapter = :good_job
+    config.good_job.enable_cron = true
+    config.good_job.cron_graceful_restart_period = 1.minute
+    config.good_job.cron = {
+      daily_webhook_refresh: {
+        cron: "0 0 * * *",
+        class: "CronDailyWebhookRefreshAllJob",
+        description: "Refresh all webhooks daily"
+      }
+    }
   end
 end
