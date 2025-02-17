@@ -45,7 +45,7 @@ module App
     config.good_job.cron_graceful_restart_period = 1.minute
     config.good_job.cron = {
       daily_webhook_refresh: {
-        cron: "0 0 * * *",
+        cron: "0 9 * * *",
         class: "CronDailyWebhookRefreshAllJob",
         description: "Refresh all webhooks daily"
       },
