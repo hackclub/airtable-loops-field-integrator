@@ -2,7 +2,7 @@ class LoopsUpdateFieldJob < ApplicationJob
   include GoodJob::ActiveJobExtensions::Concurrency
 
   good_job_control_concurrency_with(
-    perform_throttle: [3, 1.second],
+    perform_throttle: [5, 1.second],
     key: -> { 'loops_api' }
   )
 
