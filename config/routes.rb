@@ -13,4 +13,7 @@ Rails.application.routes.draw do
   # root "posts#index"
 
   mount GoodJob::Engine => '/'
+
+  # Airtable webhook endpoint
+  post 'airtable/webhook', to: 'airtable/webhooks#receive'
 end
