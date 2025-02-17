@@ -57,13 +57,7 @@ class WebhookPayloadHandlerJob < ApplicationJob
     changes.each do |table_id, records|
       fields = schema[table_id]['fields']
 
-      email_field = fields.find { |f| f['name'].downcase == 'email' }
-      raise "There must be a field titled 'Email'" unless email_field
-
       records.each do |record_id, field_values|
-        email_value = fieldValues[table_id][record_id][email_field['id']]
-        raise "Invalid email format for \"#{email}\"" unless EmailValidator.valid?(email_value, mode: :strict)
-
         field_values.each do |field_id, value|
           field = fields.find { |f| f['id'] == field_id }
 
@@ -72,6 +66,12 @@ class WebhookPayloadHandlerJob < ApplicationJob
           # update job
           match = field["name"].match(LOOPS_FIELD_REGEX)
           next unless match
+
+          email_field = fields.find { |f| f['name'].downcase == 'email' }
+          raise "There must be a field titled 'Email'" unless email_field
+
+          email_value = fieldValues[table_id][record_id][email_field['id']]
+          raise "Invalid email format for \"#{email}\"" unless EmailValidator.valid?(email_value, mode: :strict)
 
           loops_field_name = match[:loops_field_name]
 
