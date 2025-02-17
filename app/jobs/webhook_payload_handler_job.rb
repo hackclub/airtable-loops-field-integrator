@@ -62,7 +62,7 @@ class WebhookPayloadHandlerJob < ApplicationJob
 
       records.each do |record_id, field_values|
         email_value = fieldValues[table_id][record_id][email_field['id']]
-        raise "Invalid email format for \"#{email}\"" unless EmailValidator.valid?(email, mode: :strict)
+        raise "Invalid email format for \"#{email}\"" unless EmailValidator.valid?(email_value, mode: :strict)
 
         field_values.each do |field_id, value|
           field = fields.find { |f| f['id'] == field_id }
@@ -75,7 +75,7 @@ class WebhookPayloadHandlerJob < ApplicationJob
 
           loops_field_name = match[:loops_field_name]
 
-          LoopsUpdateFieldJob.perform_later(email, loops_field_name, value)
+          LoopsUpdateFieldJob.perform_later(email_value, loops_field_name, value)
         end
       end
     end
