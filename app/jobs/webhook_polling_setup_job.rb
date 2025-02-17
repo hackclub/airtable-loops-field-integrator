@@ -13,6 +13,9 @@ class WebhookPollingSetupJob < ApplicationJob
           options: {
             filters: {
               dataTypes: [ 'tableData', 'tableFields', 'tableMetadata' ]
+            },
+            includes: {
+              includeCellValuesInFieldIds: 'all'
             }
           }
         }

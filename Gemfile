@@ -18,6 +18,8 @@ gem "stimulus-rails"
 # HTTP client with support for HTTP/2 and persistent connections
 gem "httpx", "~> 1.2"
 
+gem "email_validator"
+
 # Use Active Model has_secure_password [https://guides.rubyonrails.org/active_model_basics.html#securepassword]
 # gem "bcrypt", "~> 3.1.7"
 

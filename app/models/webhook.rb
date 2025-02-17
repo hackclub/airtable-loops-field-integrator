@@ -10,6 +10,30 @@ class Webhook < ApplicationRecord
   scope :unexpired, -> { where('expiration_time > ?', Time.current) }
   scope :for_base, ->(base_id) { where(base_id: base_id) }
 
+  def find_each_new_payload(&block)
+    return enum_for(:find_each_new_payload) unless block_given?
+
+    cursor = last_cursor
+    final_cursor = nil
+
+    loop do
+      response = AirtableService::Webhooks.payloads(
+        base_id: base_id,
+        webhook_id: id,
+        start_cursor: cursor
+      )
+
+      response["payloads"].each(&block)
+      
+      final_cursor = response["cursor"]
+      break unless response["mightHaveMore"]
+      cursor = response["cursor"]
+    end
+
+    # Only update the cursor after all payloads have been processed successfully
+    update!(last_cursor: final_cursor) if final_cursor
+  end
+
   def refresh!
     response = AirtableService::Webhooks.refresh(
       base_id: base_id,
@@ -49,5 +73,9 @@ class Webhook < ApplicationRecord
       base_id: base_id,
       webhook_id: id
     )
+  rescue => e
+    Rails.logger.error "Failed to delete webhook from Airtable: #{e.message}"
+    # Don't prevent the local record from being deleted even if the API call fails
+    # The webhook might already be deleted or expired in Airtable
   end
 end

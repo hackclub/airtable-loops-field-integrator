@@ -32,8 +32,6 @@ class AirtableService
         client.send(method, url)
       end
 
-      debugger if response.class == HTTPX::Response
-
       unless response.status == 200
         raise "Airtable API error: #{response.status} - #{response.body.to_s}"
       end
@@ -57,6 +55,36 @@ class AirtableService
         offset = response["offset"]
         break unless offset
       end
+    end
+
+    def self.get_schema(base_id:, include_visible_field_ids: false)
+      url = "#{META_API_URL}/bases/#{base_id}/tables"
+      url += "?include[]=visibleFieldIds" if include_visible_field_ids
+      
+      response = AirtableService.get(url)
+      
+      # Index tables by ID for easier lookup
+      tables_by_id = {}
+      response["tables"].each do |table|
+        tables_by_id[table["id"]] = table
+      end
+      
+      tables_by_id
+    end
+
+    def self.get_cached_schema(base_id:, include_visible_field_ids: false, expires_in: 5.minutes)
+      cache_key = "airtable/schema/#{base_id}/#{include_visible_field_ids}/#{expires_in.to_s}"
+      
+      Rails.cache.fetch(cache_key, expires_in: expires_in) do
+        get_schema(
+          base_id: base_id,
+          include_visible_field_ids: include_visible_field_ids
+        )
+      end
+    end
+
+    def self.clear_schema_cache(base_id)
+      Rails.cache.delete_matched("airtable/schema/#{base_id}/*")
     end
 
     private
@@ -88,6 +116,13 @@ class AirtableService
     def self.refresh(base_id:, webhook_id:)
       url = "#{API_URL}/bases/#{base_id}/webhooks/#{webhook_id}/refresh"
       AirtableService.post(url, nil)
+    end
+
+    def self.payloads(base_id:, webhook_id:, start_cursor: nil)
+      url = "#{API_URL}/bases/#{base_id}/webhooks/#{webhook_id}/payloads"
+      url += "?cursor=#{start_cursor}" if start_cursor
+      
+      AirtableService.get(url)
     end
   end
 end
