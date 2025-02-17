@@ -71,7 +71,7 @@ class WebhookPayloadHandlerJob < ApplicationJob
           raise "There must be a field titled 'Email'" unless email_field
 
           email_value = fieldValues[table_id][record_id][email_field['id']]
-          raise "Invalid email format for \"#{email}\"" unless EmailValidator.valid?(email_value, mode: :strict)
+          raise "Invalid email format for \"#{email_value}\"" unless EmailValidator.valid?(email_value, mode: :strict)
 
           loops_field_name = match[:loops_field_name]
 
