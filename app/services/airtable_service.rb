@@ -73,7 +73,7 @@ class AirtableService
     end
 
     def self.get_cached_schema(base_id:, include_visible_field_ids: false, expires_in: 5.minutes)
-      cache_key = "airtable/schema/#{base_id}/#{include_visible_field_ids}/#{expires_in.to_s}"
+      cache_key = "airtable/schema/#{base_id}/#{include_visible_field_ids}"
       
       Rails.cache.fetch(cache_key, expires_in: expires_in) do
         get_schema(
@@ -83,8 +83,8 @@ class AirtableService
       end
     end
 
-    def self.clear_schema_cache(base_id)
-      Rails.cache.delete_matched("airtable/schema/#{base_id}/*")
+    def self.clear_schema_cache(base_id, include_visible_field_ids: false)
+      Rails.cache.delete("airtable/schema/#{base_id}/#{include_visible_field_ids}")
     end
 
     private
