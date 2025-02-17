@@ -38,5 +38,8 @@ module App
 
     # Don't generate system test files.
     config.generators.system_tests = nil
+
+    # Use GoodJob as the queue adapter
+    config.active_job.queue_adapter = :good_job
   end
 end
