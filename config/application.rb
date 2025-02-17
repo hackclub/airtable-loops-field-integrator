@@ -48,6 +48,11 @@ module App
         cron: "0 0 * * *",
         class: "CronDailyWebhookRefreshAllJob",
         description: "Refresh all webhooks daily"
+      },
+      webhook_polling_setup: {
+        cron: "* * * * *",
+        class: "WebhookPollingSetupJob",
+        description: "Setup webhooks for any missing bases every minute"
       }
     }
   end
