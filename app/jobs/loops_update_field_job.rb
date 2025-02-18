@@ -1,14 +1,8 @@
 class LoopsUpdateFieldJob < ApplicationJob
-  include GoodJob::ActiveJobExtensions::Concurrency
-
-  good_job_control_concurrency_with(
-    perform_throttle: [2, 1.second],
-    key: -> { 'loops_api' }
-  )
-
   # loops_field_updates is a hash of field names and values to update
   # ex. { "firstName" => "John", "lastName" => "Doe" }
   def perform(base_id, email, loops_field_updates)
+    RateLimiterService::Loops.wait_turn
     found_contact = LoopsSdk::Contacts.find(email: email)
 
     if found_contact.empty?

@@ -58,6 +58,8 @@ class AirtableService
     end
 
     def self.get_schema(base_id:, include_visible_field_ids: false)
+      RateLimiterService::Airtable(base_id).wait_turn
+      
       url = "#{META_API_URL}/bases/#{base_id}/tables"
       url += "?include[]=visibleFieldIds" if include_visible_field_ids
       
@@ -99,6 +101,7 @@ class AirtableService
     private
 
     def self.fetch_bases(offset = nil)
+      # Note: No rate limiting here as this is a global API call, not base-specific
       url = "#{META_API_URL}/bases"
       url += "?offset=#{offset}" if offset
       AirtableService.get(url)
@@ -107,6 +110,8 @@ class AirtableService
 
   class Webhooks
     def self.create(base_id:, notification_url: nil, specification:)
+      RateLimiterService::Airtable(base_id).wait_turn
+      
       url = "#{API_URL}/bases/#{base_id}/webhooks"
       
       body = {
@@ -118,16 +123,22 @@ class AirtableService
     end
 
     def self.delete(base_id:, webhook_id:)
+      RateLimiterService::Airtable(base_id).wait_turn
+      
       url = "#{API_URL}/bases/#{base_id}/webhooks/#{webhook_id}"
       AirtableService.delete(url)
     end
 
     def self.refresh(base_id:, webhook_id:)
+      RateLimiterService::Airtable(base_id).wait_turn
+      
       url = "#{API_URL}/bases/#{base_id}/webhooks/#{webhook_id}/refresh"
       AirtableService.post(url, nil)
     end
 
     def self.payloads(base_id:, webhook_id:, start_cursor: nil)
+      RateLimiterService::Airtable(base_id).wait_turn
+      
       url = "#{API_URL}/bases/#{base_id}/webhooks/#{webhook_id}/payloads"
       url += "?cursor=#{start_cursor}" if start_cursor
       
