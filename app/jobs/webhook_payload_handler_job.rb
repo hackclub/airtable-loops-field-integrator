@@ -16,6 +16,7 @@ class WebhookPayloadHandlerJob < ApplicationJob
   def perform(payload)
     base_id = payload.base_id
     pbody = payload.body
+    timestamp = Time.parse(payload.body['timestamp'])
 
     ## determine changes, clear schema cache if neededd ##
 
@@ -97,7 +98,11 @@ class WebhookPayloadHandlerJob < ApplicationJob
         end
 
         if loops_field_updates.any?
-          LoopsUpdateFieldJob.perform_later(base_id,email_value, loops_field_updates)
+          # we set the priority to the timestamp of the webhook (lower numbesr are processed first)
+          # this is to ensure that if we build up a queue, the oldest field
+          # updates are processed first so the newest field changes are the last
+          # to reflect
+          LoopsUpdateFieldJob.set(priority: timestamp.to_i).perform_later(base_id, email_value, loops_field_updates)
         end
       end
     end
