@@ -83,6 +83,7 @@ class WebhookPayloadHandlerJob < ApplicationJob
 
         field_values.each do |field_id, value|
           field = fields.find { |f| f['id'] == field_id }
+          next unless field
 
           # if the webhook indicates that a field's value has changed that
           # matches our regex to detect fields to set in loops, queue a loops
