@@ -1,4 +1,11 @@
 class LoopsUpdateFieldJob < ApplicationJob
+  include GoodJob::ActiveJobExtensions::Concurrency
+
+  good_job_control_concurrency_with(
+    perform_throttle: [2, 1.second],
+    key: -> { 'loops_api' }
+  )
+
   def perform(email, loops_field_name, loops_field_value)
     found_contact = LoopsSdk::Contacts.find(email: email)
 
