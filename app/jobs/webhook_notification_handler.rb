@@ -1,5 +1,12 @@
 class WebhookNotificationHandler < ApplicationJob
+  include GoodJob::ActiveJobExtensions::Concurrency
+
   retry_on AirtableService::RateLimitError, wait: :polynomially_longer, attempts: Float::INFINITY
+
+  good_job_control_concurrency_with(
+    total_limit: 1,
+    key: -> { "#{self.class.name}-#{arguments.second}"}
+  )
 
   def perform(base_id, webhook_id, timestamp)
     w = Webhook.find_by(id: webhook_id)
