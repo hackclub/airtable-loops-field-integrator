@@ -1,4 +1,6 @@
 class WebhookNotificationHandler < ApplicationJob
+  retry_on AirtableService::RateLimitError, wait: :polynomially_longer, attempts: Float::INFINITY
+
   def perform(base_id, webhook_id, timestamp)
     w = Webhook.find_by(id: webhook_id)
     if w.nil?
@@ -21,5 +23,4 @@ class WebhookNotificationHandler < ApplicationJob
       )
       WebhookPayloadHandlerJob.perform_later(p)
     end
-  end
 end

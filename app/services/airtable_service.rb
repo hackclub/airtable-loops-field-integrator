@@ -3,6 +3,14 @@ class AirtableService
   API_URL = "https://api.airtable.com/v0"
   META_API_URL = "#{API_URL}/meta"
 
+  class RateLimitError < StandardError
+    def initialize(response_body)
+      error_info = JSON.parse(response_body) rescue nil
+      message = error_info&.dig("errors", 0, "message") || "Rate limit exceeded"
+      super(message)
+    end
+  end
+
   class << self
     def get(url)
       make_request(:get, url)
@@ -34,6 +42,10 @@ class AirtableService
 
       if response.error
         raise "Airtable API error: #{response.error.message}"
+      end
+
+      if response.status == 429
+        raise RateLimitError.new(response.body.to_s)
       end
 
       unless response.status == 200
