@@ -33,8 +33,11 @@ class AirtableService
       end
 
       if response.error
-        resp = response.response
-        raise "Airtable API error: #{resp.status} - #{resp.body.to_s}"
+        raise "Airtable API error: #{response.error.message}"
+      end
+
+      unless response.status == 200
+        raise "Airtable API error: #{response.status} - #{response.body.to_s}"
       end
 
       return nil if response.body.to_s.empty?
