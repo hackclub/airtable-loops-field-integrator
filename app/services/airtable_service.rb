@@ -51,8 +51,8 @@ class AirtableService
           raise TimeoutError.new(url, response.error.message)
         end
 
-        if response.response.status == 429
-          raise RateLimitError.new(response.body.to_s)
+        if response.error.message.include?("Rate limit")
+          raise RateLimitError.new(response.error.message)
         end
 
         raise "Airtable API error: #{response.error.message}"
