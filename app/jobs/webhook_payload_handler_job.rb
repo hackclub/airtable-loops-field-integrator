@@ -18,6 +18,8 @@ class WebhookPayloadHandlerJob < ApplicationJob
     pbody = payload.body
     timestamp = Time.parse(payload.body['timestamp'])
 
+    success = false
+
     ## determine changes, clear schema cache if neededd ##
 
     # hash in format { tableId => { recordId => { fieldId => 'newValue' } } }
@@ -107,10 +109,13 @@ class WebhookPayloadHandlerJob < ApplicationJob
       end
     end
 
+    success = true
+
   rescue MissingEmailFieldError, InvalidEmailFormatError => e
     Rails.logger.error e.message
+    success = true
   ensure
     # destroy the payload after processing
-    payload.destroy!
+    payload.destroy! if success
   end
 end
