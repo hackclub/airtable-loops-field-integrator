@@ -11,6 +11,12 @@ class AirtableService
     end
   end
 
+  class TimeoutError < StandardError
+    def initialize(url, message)
+      super("Airtable API request timed out after 60 seconds: #{url}, #{message}")
+    end
+  end
+
   class << self
     def get(url)
       make_request(:get, url)
@@ -41,6 +47,9 @@ class AirtableService
       end
 
       if response.error
+        if response.error.message.include?("Timed out")
+          raise TimeoutError.new(url, response.error.message)
+        end
         raise "Airtable API error: #{response.error.message}"
       end
 

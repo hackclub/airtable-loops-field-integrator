@@ -13,6 +13,8 @@ class WebhookPayloadHandlerJob < ApplicationJob
     end
   end
 
+  retry_on AirtableService::RateLimitError, AirtableService::TimeoutError, wait: :polynomially_longer, attempts: Float::INFINITY
+
   def perform(payload)
     base_id = payload.base_id
     pbody = payload.body
