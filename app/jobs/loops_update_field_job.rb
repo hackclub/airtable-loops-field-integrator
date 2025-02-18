@@ -1,5 +1,5 @@
 class LoopsUpdateFieldJob < ApplicationJob
-  retry_on LoopsSdk::RateLimitError, wait: :polynomially_longer, attempts: Float::INFINITY
+  retry_on LoopsSdk::RateLimitError, Faraday::TimeoutError, wait: :polynomially_longer, attempts: Float::INFINITY
 
   # loops_field_updates is a hash of field names and values to update
   # ex. { "firstName" => "John", "lastName" => "Doe" }
