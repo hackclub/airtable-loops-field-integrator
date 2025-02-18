@@ -23,4 +23,5 @@ class WebhookNotificationHandler < ApplicationJob
       )
       WebhookPayloadHandlerJob.perform_later(p)
     end
+  end
 end
