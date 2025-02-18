@@ -31,7 +31,6 @@ class AirtableService
       else
         client.send(method, url)
       end
-      sleep 0.5 # super naive rate limiting
 
       unless response.status == 200
         raise "Airtable API error: #{response.status} - #{response.body.to_s}"
