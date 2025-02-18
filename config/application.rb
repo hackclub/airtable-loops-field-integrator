@@ -52,7 +52,8 @@ module App
       webhook_polling_setup: {
         cron: "* * * * *",
         class: "WebhookPollingSetupJob",
-        description: "Setup webhooks for any missing bases every minute"
+        description: "Setup webhooks for any missing bases every minute",
+        enabled_by_default: -> { Rails.env.production? } # Only enable in production, otherwise can be enabled manually through Dashboard
       }
     }
   end

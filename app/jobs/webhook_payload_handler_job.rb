@@ -1,7 +1,22 @@
 class WebhookPayloadHandlerJob < ApplicationJob
   LOOPS_FIELD_REGEX = /^Loops - (?<loops_field_name>.+)$/
 
-  def perform(base_id, payload)
+  class MissingEmailFieldError < StandardError
+    def initialize(table_id)
+      super("Table #{table_id} must have a field titled 'Email'")
+    end
+  end
+
+  class InvalidEmailFormatError < StandardError
+    def initialize(email)
+      super("Invalid email format for \"#{email}\"")
+    end
+  end
+
+  def perform(payload)
+    base_id = payload.base_id
+    pbody = payload.body
+
     ## determine changes, clear schema cache if neededd ##
 
     # hash in format { tableId => { recordId => { fieldId => 'newValue' } } }
@@ -10,7 +25,7 @@ class WebhookPayloadHandlerJob < ApplicationJob
     # in format { tableId => { recordId => { fieldId => value} }
     fieldValues = {}
 
-    payload["changedTablesById"].each do |table_id, table_data|
+    pbody["changedTablesById"].each do |table_id, table_data|
       changes[table_id] = {}
       fieldValues[table_id] = {}
 
@@ -46,7 +61,7 @@ class WebhookPayloadHandlerJob < ApplicationJob
     end
 
     # invalidate cache for table changes
-    if payload["createdTablesById"] || payload["destroyedTableIds"]
+    if pbody["createdTablesById"] || pbody["destroyedTableIds"]
       AirtableService::Bases.clear_schema_cache(base_id)
     end
 
@@ -58,6 +73,9 @@ class WebhookPayloadHandlerJob < ApplicationJob
       fields = schema[table_id]['fields']
 
       records.each do |record_id, field_values|
+        loops_field_updates = {}
+        email_value = nil
+
         field_values.each do |field_id, value|
           field = fields.find { |f| f['id'] == field_id }
 
@@ -68,16 +86,26 @@ class WebhookPayloadHandlerJob < ApplicationJob
           next unless match
 
           email_field = fields.find { |f| f['name'].downcase == 'email' }
-          raise "There must be a field titled 'Email'" unless email_field
+          raise MissingEmailFieldError.new(table_id) unless email_field
 
           email_value = fieldValues[table_id][record_id][email_field['id']]
-          raise "Invalid email format for \"#{email_value}\"" unless EmailValidator.valid?(email_value, mode: :strict)
+          raise InvalidEmailFormatError.new(email_value) unless EmailValidator.valid?(email_value, mode: :strict)
 
           loops_field_name = match[:loops_field_name]
 
-          LoopsUpdateFieldJob.perform_later(email_value, loops_field_name, value)
+          loops_field_updates[loops_field_name] = value
+        end
+
+        if loops_field_updates.any?
+          LoopsUpdateFieldJob.perform_later(base_id,email_value, loops_field_updates)
         end
       end
     end
+
+  rescue MissingEmailFieldError, InvalidEmailFormatError => e
+    Rails.logger.error e.message
+  ensure
+    # destroy the payload after processing
+    payload.destroy!
   end
 end

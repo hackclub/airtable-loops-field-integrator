@@ -6,27 +6,28 @@ class LoopsUpdateFieldJob < ApplicationJob
     key: -> { 'loops_api' }
   )
 
-  def perform(email, loops_field_name, loops_field_value)
+  # loops_field_updates is a hash of field names and values to update
+  # ex. { "firstName" => "John", "lastName" => "Doe" }
+  def perform(base_id, email, loops_field_updates)
     found_contact = LoopsSdk::Contacts.find(email: email)
 
     if found_contact.empty?
+      base = AirtableService::Bases.find_cached(base_id)
+
       created_contact = LoopsSdk::Contacts.create(
         email: email,
         properties: {
           userGroup: 'Hack Clubber',
-          source: "Airtable <> Loops Integrator - #{loops_field_name}"
+          source: "Airtable - #{base['name']}"
         }
       )
     end
 
-    to_update = {}
-    to_update[loops_field_name] = loops_field_value
-
     LoopsSdk::Contacts.update(
       email: email,
-      properties: to_update
+      properties: loops_field_updates
     )
 
-    Rails.logger.info "Updated #{email} with #{loops_field_name} to #{loops_field_value}"
+    Rails.logger.info "Updated #{email} with fields: #{loops_field_updates.inspect}"
   end
 end

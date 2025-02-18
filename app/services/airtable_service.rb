@@ -83,6 +83,15 @@ class AirtableService
       end
     end
 
+    def self.find_cached(base_id)
+      Rails.cache.fetch("airtable/bases", expires_in: 1.hour) do
+        # Collect all bases into an array
+        bases = []
+        find_each { |base| bases << base }
+        bases
+      end.find { |base| base["id"] == base_id }
+    end
+
     def self.clear_schema_cache(base_id, include_visible_field_ids: false)
       Rails.cache.delete("airtable/schema/#{base_id}/#{include_visible_field_ids}")
     end

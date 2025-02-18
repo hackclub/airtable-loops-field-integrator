@@ -12,7 +12,7 @@ Rails.application.routes.draw do
   # Defines the root path route ("/")
   # root "posts#index"
 
-  mount GoodJob::Engine => '/'
+  mount GoodJob::Engine => '/good_job'
 
   # Airtable webhook endpoint
   post 'airtable/webhook', to: 'airtable/webhooks#receive'

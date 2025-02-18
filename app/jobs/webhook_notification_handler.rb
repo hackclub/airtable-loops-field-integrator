@@ -21,7 +21,12 @@ class WebhookNotificationHandler < ApplicationJob
     Rails.logger.info "Received webhook notification for base #{base_id}, webhook #{webhook_id} at #{timestamp}"
 
     w.find_each_new_payload do |payload|
-      WebhookPayloadHandlerJob.perform_later(base_id, payload)
+      p = Payload.create!(
+        base_id: base_id,
+        webhook_id: webhook_id,
+        body: payload
+      )
+      WebhookPayloadHandlerJob.perform_later(p)
     end
   end
 end
