@@ -112,11 +112,11 @@ class WebhookPayloadHandlerJob < ApplicationJob
           raise InvalidEmailFormatError.new(email_value) unless valid_email?(email_value)
 
           if normal_match
-            loops_field_name = match[:loops_field_name]
+            loops_field_name = normal_match[:loops_field_name]
 
             loops_field_updates[loops_field_name] = value
           elsif special_match
-            special_field_name = match[:special_field_name]
+            special_field_name = special_match[:special_field_name]
 
             case special_field_name
             when 'setFullName'
