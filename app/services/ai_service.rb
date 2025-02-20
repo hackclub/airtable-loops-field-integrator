@@ -3,7 +3,7 @@ require 'json'
 
 class AiService
   API_KEY = Rails.application.credentials.openai.api_key
-  MODEL = "o3-mini"
+  MODEL = "gpt-4o"
 
   class << self
     def prompt_structured(prompt, output:)
