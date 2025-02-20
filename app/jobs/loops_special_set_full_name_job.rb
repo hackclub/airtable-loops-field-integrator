@@ -23,8 +23,8 @@ class LoopsSpecialSetFullNameJob < ApplicationJob
     )
 
     LoopsUpdateFieldJob.set(priority: edit_timestamp.to_i).perform_later(base_id, email, {
-      first_name: name_parts[:first_name],
-      last_name: name_parts[:last_name],
+      firstName: name_parts[:first_name],
+      lastName: name_parts[:last_name],
     })
   end
 end
