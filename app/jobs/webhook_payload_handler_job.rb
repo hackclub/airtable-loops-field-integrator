@@ -30,6 +30,12 @@ class WebhookPayloadHandlerJob < ApplicationJob
     # in format { tableId => { recordId => { fieldId => value} }
     fieldValues = {}
 
+    if pbody["changedTablesById"].blank?
+      Rails.logger.info "No changes to tables (but potentially other events in webhook)"
+      success = true
+      return
+    end
+
     pbody["changedTablesById"].each do |table_id, table_data|
       changes[table_id] = {}
       fieldValues[table_id] = {}
