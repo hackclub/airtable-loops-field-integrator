@@ -95,7 +95,7 @@ class WebhookPayloadHandlerJob < ApplicationJob
           raise MissingEmailFieldError.new(table_id) unless email_field
 
           email_value = fieldValues[table_id][record_id][email_field['id']]
-          raise InvalidEmailFormatError.new(email_value) unless EmailValidator.valid?(email_value, mode: :strict)
+          raise InvalidEmailFormatError.new(email_value) unless valid_email?(email_value)
 
           loops_field_name = match[:loops_field_name]
 
@@ -120,5 +120,19 @@ class WebhookPayloadHandlerJob < ApplicationJob
   ensure
     # destroy the payload after processing
     payload.destroy! if success
+  end
+
+  private
+
+  def valid_email?(email)
+    return false unless email.is_a?(String)
+    return false unless EmailValidator.valid?(email, mode: :strict)
+    
+    # Check if TLD has more than one character
+    domain = email.split('@')[1]
+    tld = domain&.split('.')&.last
+    return false unless tld && tld.length > 1
+    
+    true
   end
 end
