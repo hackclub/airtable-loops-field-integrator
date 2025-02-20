@@ -31,7 +31,7 @@ class WebhookPayloadHandlerJob < ApplicationJob
     fieldValues = {}
 
     if pbody["changedTablesById"].blank?
-      Rails.logger.info "No changes to tables (but potentially other events in webhook)"
+      Rails.logger.info "No changes to tables (but potentially other events in webhook). Note: I know that createdTablesById is one event we don't handle right now."
       success = true
       return
     end
