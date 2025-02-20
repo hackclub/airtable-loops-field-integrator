@@ -1,5 +1,6 @@
 class WebhookPayloadHandlerJob < ApplicationJob
   LOOPS_FIELD_REGEX = /^Loops - (?<loops_field_name>.+)$/
+  LOOPS_SPECIAL_FIELD_REGEX = /^Loops - Special - (?<special_field_name>setFullName)$/
 
   class MissingEmailFieldError < StandardError
     def initialize(table_id)
@@ -10,6 +11,12 @@ class WebhookPayloadHandlerJob < ApplicationJob
   class InvalidEmailFormatError < StandardError
     def initialize(email)
       super("Invalid email format for \"#{email}\"")
+    end
+  end
+
+  class InvalidSpecialFieldError < StandardError
+    def initialize(special_field_name)
+      super("Invalid special field name: \"#{special_field_name}\"")
     end
   end
 
@@ -94,8 +101,9 @@ class WebhookPayloadHandlerJob < ApplicationJob
           # if the webhook indicates that a field's value has changed that
           # matches our regex to detect fields to set in loops, queue a loops
           # update job
-          match = field["name"].match(LOOPS_FIELD_REGEX)
-          next unless match
+          normal_match = field["name"].match(LOOPS_FIELD_REGEX)
+          special_match = field["name"].match(LOOPS_SPECIAL_FIELD_REGEX)
+          next unless normal_match || special_match
 
           email_field = fields.find { |f| f['name'].downcase == 'email' }
           raise MissingEmailFieldError.new(table_id) unless email_field
@@ -103,9 +111,20 @@ class WebhookPayloadHandlerJob < ApplicationJob
           email_value = fieldValues[table_id][record_id][email_field['id']]
           raise InvalidEmailFormatError.new(email_value) unless valid_email?(email_value)
 
-          loops_field_name = match[:loops_field_name]
+          if normal_match
+            loops_field_name = match[:loops_field_name]
 
-          loops_field_updates[loops_field_name] = value
+            loops_field_updates[loops_field_name] = value
+          elsif special_match
+            special_field_name = match[:special_field_name]
+
+            case special_field_name
+            when 'setFullName'
+              LoopsSpecialSetFullNameJob.set(priority: timestamp.to_i).perform_later(timestamp, base_id, email_value, value)
+            else
+              raise InvalidSpecialFieldError.new(special_field_name)
+            end
+          end
         end
 
         if loops_field_updates.any?

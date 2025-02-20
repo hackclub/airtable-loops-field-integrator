@@ -15,39 +15,43 @@ class AiService
         additionalProperties: false
       }
 
-      response = HTTPX.post(
-        "https://api.openai.com/v1/chat/completions",
-        headers: {
-          "Content-Type" => "application/json",
-          "Authorization" => "Bearer #{API_KEY}"
-        },
-        json: {
-          model: MODEL,
-          messages: [
-            { role: "user", content: prompt }
-          ],
-          response_format: {
-            type: "json_schema",
-            json_schema: {
-              name: "structured_output",
-              schema: json_schema,
-              strict: true
+      cache_key = "ai_service/#{MODEL}/#{Digest::SHA256.hexdigest(prompt)}"
+
+      Rails.cache.fetch(cache_key) do
+        response = HTTPX.post(
+          "https://api.openai.com/v1/chat/completions",
+          headers: {
+            "Content-Type" => "application/json",
+            "Authorization" => "Bearer #{API_KEY}"
+          },
+          json: {
+            model: MODEL,
+            messages: [
+              { role: "user", content: prompt }
+            ],
+            response_format: {
+              type: "json_schema",
+              json_schema: {
+                name: "structured_output",
+                schema: json_schema,
+                strict: true
+              }
             }
           }
-        }
-      )
+        )
 
-      raise response.body.to_s unless response.status == 200
+        raise response.body.to_s unless response.status == 200
 
-      parsed_response = JSON.parse(response.body.to_s)
-      content = parsed_response["choices"][0]["message"]["content"]
-      
-      # Handle potential refusal
-      if parsed_response["choices"][0]["message"]["refusal"]
-        raise parsed_response["choices"][0]["message"]["refusal"]
+        parsed_response = JSON.parse(response.body.to_s)
+        content = parsed_response["choices"][0]["message"]["content"]
+        
+        # Handle potential refusal
+        if parsed_response["choices"][0]["message"]["refusal"]
+          raise parsed_response["choices"][0]["message"]["refusal"]
+        end
+
+        JSON.parse(content, symbolize_names: true)
       end
-
-      JSON.parse(content)
     end
 
     private
