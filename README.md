@@ -18,3 +18,7 @@ Example: `WEBHOOK_BASE_URL=https://airtable-loops-integrator.hackclub.com`
 - [x] Concurrency controls
 - [ ] Graceful error handling that displays to user
 - [ ] Descriptive README
+
+Feature ideas:
+
+- [ ] Add "special" fields that can be set like `Loops - Special - setFirstAndLastName` and `Loops - Special - setAddress` that would have an AI parsing step to break the provided info into parts.
