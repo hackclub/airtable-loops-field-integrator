@@ -1,5 +1,5 @@
 class WebhookPayloadHandlerJob < ApplicationJob
-  LOOPS_FIELD_REGEX = /^Loops - (?<loops_field_name>.+)$/
+  LOOPS_FIELD_REGEX = /^Loops - (?<loops_field_name>[^\s]+)$/
   LOOPS_SPECIAL_FIELD_REGEX = /^Loops - Special - (?<special_field_name>setFullName)$/
 
   class MissingEmailFieldError < StandardError
