@@ -134,7 +134,11 @@ class WebhookPayloadHandlerJob < ApplicationJob
           # this is to ensure that if we build up a queue, the oldest field
           # updates are processed first so the newest field changes are the last
           # to reflect
-          LoopsUpdateFieldJob.set(priority: timestamp.to_i).perform_later(base_id, email_value, loops_field_updates)
+          priority = timestamp.to_i
+          if ENV['PRIORITY_BASES'].split(',').include?(base_id)
+            priority = 0
+          end
+          LoopsUpdateFieldJob.set(priority: priority).perform_later(base_id, email_value, loops_field_updates)
         end
       end
     end
