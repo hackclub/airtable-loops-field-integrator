@@ -1,6 +1,6 @@
 class WebhookPayloadHandlerJob < ApplicationJob
   LOOPS_FIELD_REGEX = /^Loops - (?<loops_field_name>[^\s]+)$/
-  LOOPS_SPECIAL_FIELD_REGEX = /^Loops - Special - (?<special_field_name>setFullName)$/
+  LOOPS_SPECIAL_FIELD_REGEX = /^Loops - Special - (?<special_field_name>setFullName|setFullAddress)$/
 
   class MissingEmailFieldError < StandardError
     def initialize(table_id)
@@ -121,6 +121,8 @@ class WebhookPayloadHandlerJob < ApplicationJob
             case special_field_name
             when 'setFullName'
               LoopsSpecialSetFullNameJob.set(priority: timestamp.to_i).perform_later(timestamp, base_id, email_value, value)
+            when 'setFullAddress'
+              LoopsSpecialSetFullAddressJob.set(priority: timestamp.to_i).perform_later(timestamp, base_id, email_value, value)
             else
               raise InvalidSpecialFieldError.new(special_field_name)
             end
