@@ -158,6 +158,7 @@ class WebhookPayloadHandlerJob < ApplicationJob
   def valid_email?(email)
     return false unless email.is_a?(String)
     return false unless EmailValidator.valid?(email, mode: :strict)
+    return false unless email.ascii_only?
     
     # Check if TLD has more than one character
     domain = email.split('@')[1]
