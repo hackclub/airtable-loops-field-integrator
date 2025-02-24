@@ -1,6 +1,9 @@
 class LoopsSpecialSetFullNameJob < ApplicationJob
   # raw_name_text should be the full name of the person, or any other name details we have
   def perform(edit_timestamp, base_id, email, raw_name_text)
+    raw_name_text = raw_name_text.to_s.strip
+    return if raw_name_text.blank?
+
     prompt = <<~PROMPT
 A user provided us with unstructured data for their first and last name. We need to break it into first_name and last_name parts to use in our email list system.
 
