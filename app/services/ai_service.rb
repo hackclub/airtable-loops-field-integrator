@@ -4,6 +4,8 @@ require 'json'
 class AiService
   API_KEY = Rails.application.credentials.openai.api_key
   MODEL = "gpt-4o"
+  
+  class MissingAddressPartsError < StandardError; end
 
   class << self
     def prompt_structured(prompt, output:)
@@ -52,6 +54,41 @@ class AiService
 
         JSON.parse(content, symbolize_names: true)
       end
+    end
+
+    def parse_full_address(raw_address_text)
+      prompt = <<~PROMPT
+A user provided us with unstructured data for their mailing address. We need to break it into address_line_1, address_line_2 (optional), city, state_or_province, zip_or_postal_code, and country parts
+
+1. Break the provided info into parts.
+2. Strip unnecessary punctuation
+3. Ensure that the parts, when combined, contain all of the user-provided text. Some countries have complicated address systems, and parts of address text that seem insignificant are crucial for mail to be delivered.
+4. Do not invent anything in your returned address (ex. if the user didn't specify a country, don't list a country, and so on)
+5. There is a maximum of 30 characters per part.
+
+User provided info:
+
+#{raw_address_text}
+PROMPT
+
+      parts = prompt_structured(
+        prompt,
+        output: {
+          address_line_1: :string,
+          address_line_2: :string,
+          city: :string,
+          state_or_province: :string,
+          zip_or_postal_code: :string,
+          country: :string,
+        }
+      )
+
+      required_parts = [:address_line_1, :city, :state_or_province, :zip_or_postal_code, :country]
+      missing_parts = required_parts.select { |part| parts[part].to_s.empty? }
+
+      raise MissingAddressPartsError, "Missing required parts: #{missing_parts.join(', ')}" if missing_parts.any?
+
+      parts
     end
 
     private

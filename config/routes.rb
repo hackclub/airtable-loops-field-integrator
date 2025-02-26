@@ -16,4 +16,9 @@ Rails.application.routes.draw do
 
   # Airtable webhook endpoint
   post 'airtable/webhook', to: 'airtable/webhooks#receive'
+  
+  # API routes
+  namespace :api do
+    post 'convert_address_to_parts', to: 'address#convert_to_parts'
+  end
 end
