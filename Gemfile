@@ -16,7 +16,7 @@ gem "turbo-rails"
 gem "stimulus-rails"
 
 # HTTP client with support for HTTP/2 and persistent connections
-gem "httpx", "~> 1.2"
+gem "httpx", "~> 1.4"
 
 gem "email_validator"
 gem "loops_sdk"
