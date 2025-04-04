@@ -41,6 +41,7 @@ module App
 
     # Use GoodJob as the queue adapter
     config.active_job.queue_adapter = :good_job
+    config.good_job.preserve_job_records = false
     config.good_job.enable_cron = true
     config.good_job.cron_graceful_restart_period = 1.minute
     config.good_job.cron = {
