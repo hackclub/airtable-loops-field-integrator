@@ -1,5 +1,10 @@
 class LoopsUpdateFieldJob < ApplicationJob
-  perform_limit: 10
+  include GoodJob::ActiveJobExtensions::Concurrency
+
+  good_job_control_concurrency_with(
+    perform_limit: 10
+  )
+
   retry_on LoopsSdk::RateLimitError, Faraday::TimeoutError, wait: :polynomially_longer, attempts: Float::INFINITY
 
   # loops_field_updates is a hash of field names and values to update
