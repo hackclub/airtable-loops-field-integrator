@@ -116,8 +116,8 @@ GEM
       fugit (>= 1.11.0)
       railties (>= 6.1.0)
       thor (>= 1.0.0)
-    http-2 (1.0.2)
-    httpx (1.4.0)
+    http-2 (1.1.1)
+    httpx (1.5.0)
       http-2 (>= 1.0.0)
     i18n (1.14.7)
       concurrent-ruby (~> 1.0)
@@ -329,7 +329,7 @@ DEPENDENCIES
   debug
   email_validator
   good_job
-  httpx (~> 1.2)
+  httpx (~> 1.5)
   importmap-rails
   kamal
   loops_sdk
