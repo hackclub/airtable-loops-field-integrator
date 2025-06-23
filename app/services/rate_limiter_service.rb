@@ -48,7 +48,7 @@ module RateLimiterService
   end
 
   class Loops
-    @bucket = TokenBucket.new(6.0, 6) # 6 requests per second
+    @bucket = TokenBucket.new(12.0, 12) # 12 requests per second
 
     class << self
       def wait_turn
