@@ -1,0 +1,49 @@
+<div style="max-width: 800px; margin: 0 auto; padding: 20px;">
+  <h1>Full Refresh</h1>
+  
+  <div style="background: #f0f8ff; border: 1px solid #b0d4f1; padding: 15px; margin: 20px 0; border-radius: 5px;">
+    <h2>What does this do?</h2>
+    <p>
+      A full refresh will process all records in all tables that contain Loops fields for the selected base. 
+      This is useful when Airtable webhooks aren't working properly and you need to sync all data to Loops.
+    </p>
+  </div>
+
+  <% if notice %>
+    <div style="background: #f0fff4; border: 1px solid #68d391; padding: 15px; margin: 20px 0; border-radius: 5px;">
+      <p style="color: #2f855a;"><%= notice %></p>
+    </div>
+  <% end %>
+
+  <% if alert %>
+    <div style="background: #fff5f5; border: 1px solid #fc8181; padding: 15px; margin: 20px 0; border-radius: 5px;">
+      <p style="color: #c53030;"><%= alert %></p>
+    </div>
+  <% end %>
+
+  <%= form_with url: full_refresh_index_path, local: true, style: "background: white; padding: 20px; border: 1px solid #ccc; border-radius: 5px; margin: 20px 0;" do |form| %>
+    <div style="margin-bottom: 15px;">
+      <%= form.label :base_id, "Select Base:" %>
+      <%= form.select :base_id, 
+          options_from_collection_for_select(@bases, "id", "name", ""), 
+          { prompt: "Choose a base..." }, 
+          { style: "width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 3px;" } %>
+    </div>
+
+    <div style="text-align: right;">
+      <%= form.submit "Start Full Refresh", 
+          style: "background: #3182ce; color: white; padding: 10px 20px; border: none; border-radius: 3px; cursor: pointer;",
+          data: { confirm: "Are you sure you want to start a full refresh? This will process all records and may take a while." } %>
+    </div>
+  <% end %>
+
+  <div style="margin-top: 30px;">
+    <h2>Available Bases</h2>
+    <% @bases.each do |base| %>
+      <div style="background: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; margin: 10px 0; border-radius: 5px;">
+        <h3><%= base['name'] %></h3>
+        <p style="color: #6c757d; font-size: 0.9em;">ID: <%= base['id'] %></p>
+      </div>
+    <% end %>
+  </div>
+</div>
