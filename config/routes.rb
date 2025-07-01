@@ -10,7 +10,7 @@ Rails.application.routes.draw do
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
   # Defines the root path route ("/")
-  root "full_refresh#index"
+  # root "posts#index"
 
   mount GoodJob::Engine => '/good_job'
 
@@ -21,7 +21,4 @@ Rails.application.routes.draw do
   namespace :api do
     post 'convert_address_to_parts', to: 'address#convert_to_parts'
   end
-
-  # Full refresh routes
-  resources :full_refresh, only: [:index, :create]
 end
