@@ -134,6 +134,32 @@ class AirtableService
     end
   end
 
+  class Records
+    def self.list(base_id:, table_id:, offset: nil)
+      RateLimiterService::Airtable(base_id).wait_turn
+      
+      url = "#{API_URL}/#{base_id}/#{table_id}"
+      url += "?offset=#{offset}" if offset
+      
+      AirtableService.get(url)
+    end
+
+    def self.find_each(base_id:, table_id:, &block)
+      return enum_for(:find_each, base_id: base_id, table_id: table_id) unless block_given?
+
+      offset = nil
+      loop do
+        response = list(base_id: base_id, table_id: table_id, offset: offset)
+        records = response["records"]
+        
+        records.each(&block)
+        
+        offset = response["offset"]
+        break unless offset
+      end
+    end
+  end
+
   class Webhooks
     def self.create(base_id:, notification_url: nil, specification:)
       RateLimiterService::Airtable(base_id).wait_turn
