@@ -25,7 +25,7 @@
     <div style="margin-bottom: 15px;">
       <%= form.label :base_id, "Select Base:" %>
       <%= form.select :base_id, 
-          options_from_collection_for_select(@bases, "id", "name", ""), 
+          options_for_select(@bases.map { |base| [base['name'], base['id']] }, ""), 
           { prompt: "Choose a base..." }, 
           { style: "width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ccc; border-radius: 3px;" } %>
     </div>
