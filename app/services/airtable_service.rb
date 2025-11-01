@@ -6,6 +6,17 @@ class AirtableService
     ENV.fetch("AIRTABLE_PERSONAL_ACCESS_TOKEN")
   end
 
+  # Get the global rate limiter (lazy initialization)
+  # Global: 50 requests per second across all bases
+  def self.global_rate_limiter
+    @global_rate_limiter ||= RateLimiter.new(
+      redis: REDIS_FOR_RATE_LIMITING,
+      key: "rate:airtable:global",
+      limit: 50,
+      period: 1.0
+    )
+  end
+
   class RateLimitError < StandardError
     def initialize(response_body)
       error_info = JSON.parse(response_body) rescue nil
@@ -35,7 +46,53 @@ class AirtableService
 
     private
 
+    # Extract base_id from Airtable API URL
+    # Supports patterns like:
+    # - /v0/{base_id}/{table_id}
+    # - /v0/meta/bases/{base_id}/tables
+    # - /v0/bases/{base_id}/webhooks/...
+    def extract_base_id(url)
+      # Remove the API URL prefix if present
+      path = url.sub(%r{^https?://[^/]+}, "")
+      
+      # Pattern 1: /v0/meta/bases/{base_id}/... (check this first to avoid matching "meta" as base_id)
+      match = path.match(%r{^/v0/meta/bases/([^/]+)})
+      return match[1] if match
+      
+      # Pattern 2: /v0/bases/{base_id}/... (check before generic pattern)
+      match = path.match(%r{^/v0/bases/([^/]+)})
+      return match[1] if match
+      
+      # Pattern 3: /v0/{base_id}/{table_id} (records endpoint - must not be "meta" or "bases")
+      match = path.match(%r{^/v0/([^/]+)/[^/]+(?:\?|$)})
+      if match && match[1] != "meta" && match[1] != "bases"
+        return match[1]
+      end
+      
+      nil
+    end
+
+    # Get or create a per-base rate limiter
+    # Limit: 1 request per second per base
+    def rate_limiter_for_base(base_id)
+      @base_limiters ||= {}
+      @base_limiters[base_id] ||= RateLimiter.new(
+        redis: REDIS_FOR_RATE_LIMITING,
+        key: "rate:airtable:base:#{base_id}",
+        limit: 1,
+        period: 1.0
+      )
+    end
+
     def make_request(method, url, body: nil)
+      # Apply global rate limiting first (50 req/sec)
+      global_rate_limiter.acquire!
+
+      # Apply per-base rate limiting if base_id can be extracted (1 req/sec per base)
+      base_id = extract_base_id(url)
+      if base_id
+        rate_limiter_for_base(base_id).acquire!
+      end
       client = HTTPX.with(
         headers: {
           "Authorization" => "Bearer #{api_token}",
