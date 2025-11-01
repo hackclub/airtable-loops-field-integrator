@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: airtable_to_loops_development
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    # Default command - can be overridden with docker-compose run
+    command: bundle exec rails s -b 0.0.0.0
+    volumes:
+      - .:/app
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/airtable_to_loops_development
+      - REDIS_URL=redis://redis:6379/0
+      - RAILS_ENV=development
+    # Don't automatically start with docker-compose up
+    # Use: docker-compose up db redis (to start dependencies)
+    # Or: docker-compose up web (to start everything)
+    # Or: docker-compose run --service-ports web /bin/bash (for interactive)
+
+  sidekiq:
+    build: .
+    command: bundle exec sidekiq -C config/sidekiq.yml
+    volumes:
+      - .:/app
+    depends_on:
+      - db
+      - redis
+      - web
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/airtable_to_loops_development
+      - REDIS_URL=redis://redis:6379/0
+      - RAILS_ENV=development
+
+volumes:
+  postgres_data:
+  redis_data:
+
