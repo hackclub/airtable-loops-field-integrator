@@ -1,9 +1,9 @@
 module Poller
   def self.for(sync_source)
-    case sync_source.source
-    when "airtable" then Pollers::AirtableToLoops.new
+    case sync_source
+    when AirtableSyncSource then Pollers::AirtableToLoops.new
     else
-      raise "Unknown source: #{sync_source.source.inspect}"
+      raise "Unknown sync source type: #{sync_source.class.name}"
     end
   end
 end
