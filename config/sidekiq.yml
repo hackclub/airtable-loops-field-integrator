@@ -1,14 +1,14 @@
 ---
-:concurrency: 5
-:queues:
+concurrency: 5
+queues:
   - default
 
 production:
-  :concurrency: 10
+  concurrency: 10
 
 staging:
-  :concurrency: 5
+  concurrency: 5
 
 development:
-  :concurrency: 5
+  concurrency: 5
 
