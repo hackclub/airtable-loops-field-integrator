@@ -6,7 +6,7 @@
 production:
   :concurrency: 10
 
- staging:
+staging:
   :concurrency: 5
 
 development:
