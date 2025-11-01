@@ -29,6 +29,9 @@ gem "redis", "~> 5.0"
 # Use Sidekiq for background jobs
 gem "sidekiq", "~> 7.3"
 
+# HTTP client for API requests
+gem "httpx", "~> 1.0"
+
 # Reduces boot times through caching; required in config/boot.rb
 gem "bootsnap", require: false
 

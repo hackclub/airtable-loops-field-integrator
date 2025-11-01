@@ -46,6 +46,7 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/airtable_to_loops_development
       - REDIS_URL=redis://redis:6379/0
       - RAILS_ENV=development
+      - AIRTABLE_PERSONAL_ACCESS_TOKEN=${AIRTABLE_PERSONAL_ACCESS_TOKEN}
     # Don't automatically start with docker-compose up
     # Use: docker-compose up db redis (to start dependencies)
     # Or: docker-compose up web (to start everything)
@@ -64,6 +65,7 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/airtable_to_loops_development
       - REDIS_URL=redis://redis:6379/0
       - RAILS_ENV=development
+      - AIRTABLE_PERSONAL_ACCESS_TOKEN=${AIRTABLE_PERSONAL_ACCESS_TOKEN}
 
 volumes:
   postgres_data:
