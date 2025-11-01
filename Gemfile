@@ -28,6 +28,7 @@ gem "redis", "~> 5.0"
 
 # Use Sidekiq for background jobs
 gem "sidekiq", "~> 7.3"
+gem "sidekiq-scheduler" # seconds-level schedules like every 15s
 
 # HTTP client for API requests
 gem "httpx", "~> 1.0"

@@ -1,7 +1,15 @@
 ---
 concurrency: 5
 queues:
+  - scheduler
+  - polling
   - default
+
+:schedule:
+  sync_source_enqueuer:
+    every: ["15s"]
+    class: "SyncSourceEnqueuerWorker"
+    queue: scheduler
 
 production:
   concurrency: 10

@@ -66,6 +66,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - RAILS_ENV=development
       - AIRTABLE_PERSONAL_ACCESS_TOKEN=${AIRTABLE_PERSONAL_ACCESS_TOKEN}
+      - SIDEKIQ_SCHEDULER=1
 
 volumes:
   postgres_data:
