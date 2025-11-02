@@ -198,9 +198,16 @@ class AirtableService
   end
 
   class Records
-    def self.list(base_id:, table_id:, offset: nil)
+    def self.list(base_id:, table_id:, offset: nil, max_records: nil, filter_formula: nil)
       url = "#{API_URL}/#{base_id}/#{table_id}"
-      url += "?offset=#{offset}" if offset
+      params = []
+      params << "offset=#{offset}" if offset
+      params << "maxRecords=#{max_records}" if max_records
+      if filter_formula
+        # URL encode the filter formula
+        params << "filterByFormula=#{CGI.escape(filter_formula)}"
+      end
+      url += "?#{params.join('&')}" if params.any?
       
       AirtableService.get(url)
     end
