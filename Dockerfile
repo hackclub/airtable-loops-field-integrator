@@ -23,6 +23,17 @@ RUN bundle config set --local path /usr/local/bundle
 # Install gems
 RUN bundle install --jobs 4 --retry 3
 
+# Create wrapper scripts for common Rails commands so they work without bundle exec
+RUN echo '#!/bin/bash\nbundle exec rails "$@"' > /usr/local/bin/rails && \
+    chmod +x /usr/local/bin/rails && \
+    echo '#!/bin/bash\nbundle exec rake "$@"' > /usr/local/bin/rake && \
+    chmod +x /usr/local/bin/rake && \
+    echo '#!/bin/bash\nbundle exec rspec "$@"' > /usr/local/bin/rspec && \
+    chmod +x /usr/local/bin/rspec
+
+# Ensure /usr/local/bin comes before bundler's bin directory in PATH
+ENV PATH="/usr/local/bin:/usr/local/bundle/ruby/3.3.0/bin:${PATH}"
+
 # Copy entrypoint script
 COPY entrypoint.sh /usr/bin/
 RUN chmod +x /usr/bin/entrypoint.sh
