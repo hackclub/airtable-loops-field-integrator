@@ -9,7 +9,7 @@
 #   end
 
 AirtableSyncSource.find_or_create_by!(source: "airtable", source_id: "appXXXXXXXXXXXX") do |s|
-  s.last_modified_field_name = "fldYYYYYYYYYYYY"
+  s.metadata = {}
   s.poll_interval_seconds     = 30 # per-base cadence (can vary per row)
   s.next_poll_at              = Time.current
 end

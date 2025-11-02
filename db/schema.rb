@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_11_01_195637) do
+ActiveRecord::Schema[8.0].define(version: 2025_11_02_003013) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -18,7 +18,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_01_195637) do
     t.string "source", null: false
     t.string "source_id", null: false
     t.string "cursor"
-    t.string "last_modified_field_name"
     t.integer "poll_interval_seconds", default: 30, null: false
     t.float "poll_jitter", default: 0.1, null: false
     t.datetime "next_poll_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
@@ -28,6 +27,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_01_195637) do
     t.jsonb "error_details", default: {}, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.jsonb "metadata", default: {}, null: false
     t.index ["next_poll_at"], name: "index_sync_sources_on_next_poll_at"
     t.index ["source", "source_id"], name: "index_sync_sources_on_source_and_source_id", unique: true
   end

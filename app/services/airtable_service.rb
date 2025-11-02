@@ -40,6 +40,10 @@ class AirtableService
       make_request(:post, url, body: body)
     end
 
+    def patch(url, body)
+      make_request(:patch, url, body: body)
+    end
+
     def delete(url)
       make_request(:delete, url)
     end
@@ -118,8 +122,17 @@ class AirtableService
         raise "Airtable API error: #{response.error.message}"
       end
 
-      unless response.status == 200
-        raise "Airtable API error: #{response.status} - #{response.body.to_s}"
+      # PATCH requests can return 200 (OK) for successful updates
+      unless [200, 201].include?(response.status)
+        error_body = response.body.to_s
+        # Try to parse JSON error if available
+        begin
+          error_json = response.json rescue nil
+          error_msg = error_json ? error_json.inspect : error_body
+        rescue
+          error_msg = error_body
+        end
+        raise "Airtable API error: #{response.status} - #{error_msg}"
       end
 
       return nil if response.body.to_s.empty?
@@ -156,6 +169,23 @@ class AirtableService
       end
       
       tables_by_id
+    end
+
+    def self.update_table_schema(base_id:, table_id:, fields:)
+      # Use Metadata API endpoint to update table schema
+      # According to Airtable API docs, fields can be added via PATCH to /v0/meta/bases/{baseId}/tables/{tableId}
+      # or POST to /v0/meta/bases/{baseId}/tables/{tableId}/fields
+      # Try PATCH first as it's the standard approach for updates
+      url = "#{META_API_URL}/bases/#{base_id}/tables/#{table_id}"
+      # Ensure body is properly formatted with string keys
+      body = { "fields" => fields }
+      AirtableService.patch(url, body)
+    end
+
+    def self.add_field(base_id:, table_id:, field:)
+      # Alternative: POST to /fields endpoint to add a single field
+      url = "#{META_API_URL}/bases/#{base_id}/tables/#{table_id}/fields"
+      AirtableService.post(url, field)
     end
 
     private

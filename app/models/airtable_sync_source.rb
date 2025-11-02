@@ -5,7 +5,7 @@ class AirtableSyncSource < SyncSource
 
   def set_defaults
     self.source ||= "airtable"
-    self.last_modified_field_name ||= 'Loops - Last Modified'
+    self.metadata ||= {}
   end
 end
 

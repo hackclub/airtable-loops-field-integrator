@@ -6,8 +6,6 @@ class SyncSource < ApplicationRecord
   validates :source, :source_id, presence: true
   enum :source, { airtable: "airtable" } # add other sources as needed
 
-  attribute :last_modified_field_name, :string
-
   # Map source values to class names for STI
   def self.find_sti_class(source_value)
     case source_value
