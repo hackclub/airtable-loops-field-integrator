@@ -8,8 +8,4 @@
 #     MovieGenre.find_or_create_by!(name: genre_name)
 #   end
 
-AirtableSyncSource.find_or_create_by!(source: "airtable", source_id: "appXXXXXXXXXXXX") do |s|
-  s.metadata = {}
-  s.poll_interval_seconds     = 30 # per-base cadence (can vary per row)
-  s.next_poll_at              = Time.current
-end
+# No seeding is performed. Database should be populated manually or through other means.
