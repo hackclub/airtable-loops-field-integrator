@@ -136,7 +136,7 @@ module Pollers
       
       records.each do |record|
         record_id = record["id"]
-        row_id = "#{base_id}/#{table_id}/#{record_id}"
+        row_id = "#{table_id}/#{record_id}"
         record_fields = record["fields"] || {}
         changed_values = {}
         
