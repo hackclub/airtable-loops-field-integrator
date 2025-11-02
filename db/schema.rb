@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_11_02_005019) do
+ActiveRecord::Schema[8.0].define(version: 2025_11_02_143504) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -34,7 +34,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_02_005019) do
   create_table "sync_sources", force: :cascade do |t|
     t.string "source", null: false
     t.string "source_id", null: false
-    t.string "cursor"
+    t.jsonb "cursor"
     t.integer "poll_interval_seconds", default: 30, null: false
     t.float "poll_jitter", default: 0.1, null: false
     t.datetime "next_poll_at", default: -> { "CURRENT_TIMESTAMP" }, null: false

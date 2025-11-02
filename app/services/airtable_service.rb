@@ -198,7 +198,7 @@ class AirtableService
   end
 
   class Records
-    def self.list(base_id:, table_id:, offset: nil, max_records: nil, filter_formula: nil)
+    def self.list(base_id:, table_id:, offset: nil, max_records: nil, filter_formula: nil, sort: nil)
       url = "#{API_URL}/#{base_id}/#{table_id}"
       params = []
       params << "offset=#{offset}" if offset
@@ -207,17 +207,26 @@ class AirtableService
         # URL encode the filter formula
         params << "filterByFormula=#{CGI.escape(filter_formula)}"
       end
+      if sort
+        # sort is an array of hashes: [{field: "Created Time", direction: "desc"}, ...]
+        sort.each_with_index do |sort_item, index|
+          field = sort_item[:field] || sort_item["field"]
+          direction = sort_item[:direction] || sort_item["direction"] || "asc"
+          params << "sort[#{index}][field]=#{CGI.escape(field.to_s)}"
+          params << "sort[#{index}][direction]=#{CGI.escape(direction.to_s)}"
+        end
+      end
       url += "?#{params.join('&')}" if params.any?
       
       AirtableService.get(url)
     end
 
-    def self.find_each(base_id:, table_id:, &block)
-      return enum_for(:find_each, base_id: base_id, table_id: table_id) unless block_given?
+    def self.find_each(base_id:, table_id:, filter_formula: nil, &block)
+      return enum_for(:find_each, base_id: base_id, table_id: table_id, filter_formula: filter_formula) unless block_given?
 
       offset = nil
       loop do
-        response = list(base_id: base_id, table_id: table_id, offset: offset)
+        response = list(base_id: base_id, table_id: table_id, offset: offset, filter_formula: filter_formula)
         records = response["records"]
         
         records.each(&block)
