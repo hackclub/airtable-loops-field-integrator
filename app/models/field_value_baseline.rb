@@ -14,10 +14,11 @@ class FieldValueBaseline < ApplicationRecord
   # @param field_id [String] The Airtable field ID
   # @param current_value [Object] The current field value from Airtable
   # @param checked_at [Time] When this check occurred (defaults to Time.current)
-  # @return [Hash] Returns { baseline:, changed:, first_time: }
+  # @return [Hash] Returns { baseline:, changed:, first_time:, old_value: }
   #   - baseline: The FieldValueBaseline record (persisted)
   #   - changed: Boolean indicating if value changed from last known value
   #   - first_time: Boolean indicating if this is the first time seeing this row+field
+  #   - old_value: The previous value before this update (nil if first_time)
   def self.detect_change(sync_source:, row_id:, field_id:, current_value:, checked_at: Time.current)
     bl = find_or_initialize_by(
       sync_source_id: sync_source.id,
@@ -25,6 +26,9 @@ class FieldValueBaseline < ApplicationRecord
       field_id: field_id
     )
     first_time = bl.new_record?
+    
+    # Capture old value BEFORE updating baseline
+    old_value = bl.last_known_value
 
     if first_time
       changed = true
@@ -46,7 +50,7 @@ class FieldValueBaseline < ApplicationRecord
     bl.checked_count = (bl.checked_count || 0) + 1 if bl.respond_to?(:checked_count)
     bl.save! if bl.changed? || bl.new_record?
 
-    { baseline: bl, changed: changed, first_time: first_time }
+    { baseline: bl, changed: changed, first_time: first_time, old_value: old_value }
   end
 
   # Admin/cron helper to purge stale entries

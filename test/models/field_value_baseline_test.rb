@@ -34,6 +34,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
     assert_equal current_value, result[:baseline].last_known_value
     assert_not_nil result[:baseline].last_checked_at
     assert_not_nil result[:baseline].value_last_updated_at
+    assert_nil result[:old_value], "old_value should be nil on first time"
   end
 
   test "detect_change marks first time nil value as changed" do
@@ -48,6 +49,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
     assert result[:changed], "First time with nil should be considered a change"
     assert result[:baseline].persisted?, "Baseline should be persisted"
     assert_nil result[:baseline].last_known_value
+    assert_nil result[:old_value], "old_value should be nil on first time"
   end
 
   test "detect_change detects value change" do
@@ -62,6 +64,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
       current_value: initial_value
     )
     assert result1[:first_time]
+    assert_nil result1[:old_value], "old_value should be nil on first time"
 
     # Second detection with different value
     result2 = FieldValueBaseline.detect_change(
@@ -75,6 +78,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
     assert result2[:changed], "Should detect change"
     assert_equal changed_value, result2[:baseline].last_known_value
     assert_equal result1[:baseline].id, result2[:baseline].id, "Should be same baseline record"
+    assert_equal initial_value, result2[:old_value], "old_value should be the previous value"
   end
 
   test "detect_change does not report change when value is same" do
@@ -98,6 +102,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
 
     refute result[:changed], "Should not detect change for same value"
     assert_equal value, result[:baseline].last_known_value
+    assert_equal value, result[:old_value], "old_value should be the previous value even when unchanged"
   end
 
   test "detect_change handles nil values correctly" do
@@ -110,6 +115,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
     )
     assert result1[:first_time]
     assert_nil result1[:baseline].last_known_value
+    assert_nil result1[:old_value], "old_value should be nil on first time"
 
     # Second detection with nil (should not be a change)
     result2 = FieldValueBaseline.detect_change(
@@ -119,6 +125,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
       current_value: nil
     )
     refute result2[:changed], "Nil to nil should not be a change"
+    assert_nil result2[:old_value], "old_value should be nil (previous value was nil)"
 
     # Third detection with actual value (should be a change)
     result3 = FieldValueBaseline.detect_change(
@@ -129,6 +136,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
     )
     assert result3[:changed], "Nil to value should be a change"
     assert_equal "Hello", result3[:baseline].last_known_value
+    assert_nil result3[:old_value], "old_value should be nil (previous value was nil)"
 
     # Fourth detection back to nil (should be a change)
     result4 = FieldValueBaseline.detect_change(
@@ -139,6 +147,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
     )
     assert result4[:changed], "Value to nil should be a change"
     assert_nil result4[:baseline].last_known_value
+    assert_equal "Hello", result4[:old_value], "old_value should be 'Hello' (previous value)"
   end
 
   test "detect_change handles hash values" do
@@ -408,6 +417,140 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
     )
 
     assert_equal @sync_source, baseline.sync_source
+  end
+
+  test "detect_change always includes old_value in result" do
+    # First call - old_value should be nil
+    result1 = FieldValueBaseline.detect_change(
+      sync_source: @sync_source,
+      row_id: @row_id,
+      field_id: @field_id,
+      current_value: "first"
+    )
+    
+    assert result1.key?(:old_value), "Result should always include old_value key"
+    assert_nil result1[:old_value], "old_value should be nil on first time"
+    
+    # Second call - old_value should be "first"
+    result2 = FieldValueBaseline.detect_change(
+      sync_source: @sync_source,
+      row_id: @row_id,
+      field_id: @field_id,
+      current_value: "second"
+    )
+    
+    assert result2.key?(:old_value), "Result should always include old_value key"
+    assert_equal "first", result2[:old_value], "old_value should match previous value"
+    assert_equal "first", result1[:baseline].last_known_value, "old_value should match previous baseline's last_known_value"
+    
+    # Third call - old_value should be "second"
+    result3 = FieldValueBaseline.detect_change(
+      sync_source: @sync_source,
+      row_id: @row_id,
+      field_id: @field_id,
+      current_value: "third"
+    )
+    
+    assert result3.key?(:old_value), "Result should always include old_value key"
+    assert_equal "second", result3[:old_value], "old_value should chain correctly through multiple changes"
+  end
+
+  test "detect_change old_value matches previous baseline value even when unchanged" do
+    value = "consistent"
+    
+    # First call
+    result1 = FieldValueBaseline.detect_change(
+      sync_source: @sync_source,
+      row_id: @row_id,
+      field_id: @field_id,
+      current_value: value
+    )
+    assert_nil result1[:old_value]
+    
+    # Second call with same value - old_value should still be the previous value
+    result2 = FieldValueBaseline.detect_change(
+      sync_source: @sync_source,
+      row_id: @row_id,
+      field_id: @field_id,
+      current_value: value
+    )
+    assert_equal value, result2[:old_value], "old_value should be present even when value doesn't change"
+    refute result2[:changed], "Should not be marked as changed"
+    
+    # Third call with same value again
+    result3 = FieldValueBaseline.detect_change(
+      sync_source: @sync_source,
+      row_id: @row_id,
+      field_id: @field_id,
+      current_value: value
+    )
+    assert_equal value, result3[:old_value], "old_value should still be the same value"
+  end
+
+  test "detect_change old_value tracks changes through complex sequences" do
+    # Test a sequence: nil -> value -> nil -> different value -> same value
+    values = [nil, "first", nil, "second", "second"]
+    expected_old_values = [nil, nil, "first", nil, "second"]
+    
+    values.each_with_index do |current_value, index|
+      result = FieldValueBaseline.detect_change(
+        sync_source: @sync_source,
+        row_id: @row_id,
+        field_id: @field_id,
+        current_value: current_value
+      )
+      
+      expected_old = expected_old_values[index]
+      if expected_old.nil?
+        assert_nil result[:old_value], 
+          "old_value at step #{index + 1} should be nil, got #{result[:old_value].inspect}"
+      else
+        assert_equal expected_old, result[:old_value], 
+          "old_value at step #{index + 1} should be #{expected_old.inspect}, got #{result[:old_value].inspect}"
+      end
+    end
+  end
+
+  test "detect_change old_value works with complex data types" do
+    # Test with hash
+    hash1 = { "key" => "value1" }
+    hash2 = { "key" => "value2" }
+    
+    result1 = FieldValueBaseline.detect_change(
+      sync_source: @sync_source,
+      row_id: @row_id,
+      field_id: @field_id,
+      current_value: hash1
+    )
+    assert_nil result1[:old_value]
+    
+    result2 = FieldValueBaseline.detect_change(
+      sync_source: @sync_source,
+      row_id: @row_id,
+      field_id: @field_id,
+      current_value: hash2
+    )
+    assert_equal hash1, result2[:old_value], "old_value should work with hash values"
+    
+    # Test with array
+    array1 = [1, 2, 3]
+    array2 = [4, 5, 6]
+    
+    result3 = FieldValueBaseline.detect_change(
+      sync_source: @sync_source,
+      row_id: "tbl2_rec2",
+      field_id: @field_id,
+      current_value: array1
+    )
+    assert_nil result3[:old_value]
+    
+    result4 = FieldValueBaseline.detect_change(
+      sync_source: @sync_source,
+      row_id: "tbl2_rec2",
+      field_id: @field_id,
+      current_value: array2
+    )
+    assert_equal array1, result4[:old_value], "old_value should work with array values"
   end
 end
 

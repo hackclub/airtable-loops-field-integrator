@@ -1,5 +1,7 @@
 module Pollers
   class AirtableToLoops
+    require_relative "../../lib/email_normalizer"
+    
     def call(sync_source)
       base_id = sync_source.source_id
       poll_start_time = Time.current.utc
@@ -78,11 +80,11 @@ module Pollers
       
       log_info("Processing #{records.size} record(s) for change detection")
       
-      # Detect changed values
-      changed_records = detect_changes(sync_source, base_id, table_id, records, loops_fields, email_field)
+      # Detect changed values - pass full table schema to detect ANY field changes
+      changed_records = detect_changes(sync_source, base_id, table_id, records, table, email_field)
       
       # Process changed records
-      process_changed_records(changed_records, loops_fields)
+      process_changed_records(sync_source.id, table_id, changed_records, loops_fields)
       
       # Update metadata with current Loops field IDs after processing
       update_known_loops_fields(sync_source, table_id, current_field_ids)
@@ -200,8 +202,16 @@ module Pollers
       end
     end
 
-    def detect_changes(sync_source, base_id, table_id, records, loops_fields, email_field)
+    def detect_changes(sync_source, base_id, table_id, records, table, email_field)
       changed_records = []
+      
+      # Get all fields from table schema for field ID lookup
+      all_fields = {}
+      if table && table["fields"]
+        table["fields"].each do |field|
+          all_fields[field["name"]] = field
+        end
+      end
       
       records.each do |record|
         record_id = record["id"]
@@ -209,11 +219,16 @@ module Pollers
         record_fields = record["fields"] || {}
         changed_values = {}
         
-        loops_fields.each do |field_id, field|
-          current_value = record_fields[field["name"]]
+        # Check ALL fields in the record, not just Loops fields
+        # This allows any field change to trigger the job
+        record_fields.each do |field_name, current_value|
+          # Find the field definition to get field_id
+          field = all_fields[field_name]
           
-          # Use format "field_id/field_name" for field identification
-          field_id_key = field_identifier(field_id, field['name'])
+          # If field not found in schema, create a synthetic field identifier
+          # This allows any field change to be detected
+          field_id = field ? field["id"] : "fld#{field_name.hash.abs}"
+          field_id_key = field_identifier(field_id, field_name)
           
           result = FieldValueBaseline.detect_change(
             sync_source: sync_source,
@@ -223,10 +238,18 @@ module Pollers
           )
           
           if result[:changed]
-            changed_values[field_id_key] = current_value
+            # Include old_value and modified_at for the job
+            # old_value comes from the result (nil if first_time)
+            # Use string keys for Sidekiq JSON serialization compatibility
+            changed_values[field_id_key] = {
+              "value" => current_value,
+              "old_value" => result[:old_value],
+              "modified_at" => Time.current.iso8601
+            }
           end
         end
         
+        # If ANY field changed, send to the job
         unless changed_values.empty?
           email = record_fields[email_field["name"]]
           changed_records << {
@@ -240,7 +263,7 @@ module Pollers
       changed_records
     end
 
-    def process_changed_records(changed_records, loops_fields)
+    def process_changed_records(sync_source_id, table_id, changed_records, loops_fields)
       if changed_records.empty?
         log_info("No changed records found")
         return
@@ -249,24 +272,24 @@ module Pollers
       log_info("Found #{changed_records.size} record(s) with changes")
       
       changed_records.each do |changed_record|
-        puts "\nChanged Record:"
-        puts "  ID: #{changed_record[:id]}"
-        puts "  Email: #{changed_record[:email].inspect}" if changed_record[:email]
-        puts "  Changed Values:"
-        changed_record[:changedValues].each do |field_identifier, value|
-          # Parse field_identifier which is in format "field_id/field_name"
-          field_id, field_name = field_identifier.split('/', 2)
-          field = loops_fields[field_id]
-          
-          if field
-            # Strip "Loops - " prefix if present
-            display_name = field_name.sub(/\ALoops\s*-\s*/i, "")
-            puts "    #{display_name.inspect} -> #{value.inspect}"
-          else
-            # Fallback to field_identifier if field not found
-            puts "    #{field_identifier}: #{value.inspect}"
-          end
-        end
+        record_id = changed_record[:id]
+        email = changed_record[:email]
+        
+        # Normalize email
+        normalized_email = EmailNormalizer.normalize(email)
+        next unless normalized_email # Skip if blank/invalid
+        
+        # Build changed_fields hash (already in correct format from detect_changes)
+        changed_fields = changed_record[:changedValues]
+        
+        # Enqueue job
+        PrepareLoopsFieldsForOutboxJob.perform_async(
+          email,
+          sync_source_id,
+          table_id,
+          record_id,
+          changed_fields
+        )
       end
     end
 

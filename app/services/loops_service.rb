@@ -1,3 +1,5 @@
+require_relative "../lib/email_normalizer"
+
 class LoopsService
   API_URL = "https://app.loops.so/api/v1"
 
@@ -50,7 +52,7 @@ class LoopsService
   class << self
     # Create a new contact
     def create_contact(email:, **kwargs)
-      email = normalize_email(email)
+      email = EmailNormalizer.normalize(email)
       body = { email: email }.merge(kwargs)
       make_request(:post, "#{API_URL}/contacts/create", body: body)
     end
@@ -62,7 +64,7 @@ class LoopsService
       end
       
       body = {}
-      body[:email] = normalize_email(email) if email
+      body[:email] = EmailNormalizer.normalize(email) if email
       body[:userId] = userId if userId
       body.merge!(kwargs)
       
@@ -79,7 +81,7 @@ class LoopsService
       end
 
       params = {}
-      params[:email] = normalize_email(email) if email
+      params[:email] = EmailNormalizer.normalize(email) if email
       params[:userId] = userId if userId
       
       query_string = params.map { |k, v| "#{k}=#{CGI.escape(v.to_s)}" }.join("&")
@@ -107,11 +109,6 @@ class LoopsService
     end
 
     private
-
-    # Normalize email address: lowercase and trim whitespace
-    def normalize_email(email)
-      email.to_s.strip.downcase
-    end
 
     # Public for testing purposes
     def http_client
