@@ -10,9 +10,26 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_11_02_003013) do
+ActiveRecord::Schema[8.0].define(version: 2025_11_02_005019) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "field_value_baselines", force: :cascade do |t|
+    t.bigint "sync_source_id", null: false
+    t.string "row_id", null: false
+    t.string "field_id", null: false
+    t.jsonb "last_known_value"
+    t.datetime "value_last_updated_at", null: false
+    t.datetime "last_checked_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
+    t.datetime "first_seen_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
+    t.integer "checked_count", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["last_checked_at"], name: "idx_field_value_baselines_last_checked_at"
+    t.index ["sync_source_id", "row_id", "field_id"], name: "index_field_value_baselines_on_sync_source_row_field", unique: true
+    t.index ["sync_source_id"], name: "index_field_value_baselines_on_sync_source_id"
+    t.index ["value_last_updated_at"], name: "index_field_value_baselines_on_value_last_updated_at"
+  end
 
   create_table "sync_sources", force: :cascade do |t|
     t.string "source", null: false
@@ -31,4 +48,6 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_02_003013) do
     t.index ["next_poll_at"], name: "index_sync_sources_on_next_poll_at"
     t.index ["source", "source_id"], name: "index_sync_sources_on_source_and_source_id", unique: true
   end
+
+  add_foreign_key "field_value_baselines", "sync_sources"
 end
