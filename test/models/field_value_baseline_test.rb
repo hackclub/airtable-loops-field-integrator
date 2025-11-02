@@ -26,7 +26,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
     )
 
     assert result[:first_time], "Should indicate first time"
-    refute result[:changed], "First time should not be considered a change"
+    assert result[:changed], "First time should be considered a change"
     assert result[:baseline].persisted?, "Baseline should be persisted"
     assert_equal @sync_source.id, result[:baseline].sync_source_id
     assert_equal @row_id, result[:baseline].row_id
@@ -34,6 +34,20 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
     assert_equal current_value, result[:baseline].last_known_value
     assert_not_nil result[:baseline].last_checked_at
     assert_not_nil result[:baseline].value_last_updated_at
+  end
+
+  test "detect_change marks first time nil value as changed" do
+    result = FieldValueBaseline.detect_change(
+      sync_source: @sync_source,
+      row_id: @row_id,
+      field_id: @field_id,
+      current_value: nil
+    )
+
+    assert result[:first_time], "Should indicate first time"
+    assert result[:changed], "First time with nil should be considered a change"
+    assert result[:baseline].persisted?, "Baseline should be persisted"
+    assert_nil result[:baseline].last_known_value
   end
 
   test "detect_change detects value change" do

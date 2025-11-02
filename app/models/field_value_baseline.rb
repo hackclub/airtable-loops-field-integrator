@@ -26,8 +26,9 @@ class FieldValueBaseline < ApplicationRecord
     )
     first_time = bl.new_record?
 
-    changed = false
-    unless first_time
+    if first_time
+      changed = true
+    else
       changed = bl.send(:value_changed?, current_value)
     end
 
