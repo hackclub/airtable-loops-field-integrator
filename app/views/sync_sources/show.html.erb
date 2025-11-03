@@ -144,6 +144,24 @@
     <div class="detail-value"><code><%= @sync_source.source_id %></code></div>
   </div>
   
+  <% if @sync_source.display_name.present? %>
+    <div class="detail-row">
+      <div class="detail-label">Display Name</div>
+      <div class="detail-value"><%= @sync_source.display_name %></div>
+    </div>
+    
+    <% if @sync_source.display_name_updated_at.present? %>
+      <div class="detail-row">
+        <div class="detail-label">Display Name Updated</div>
+        <div class="detail-value">
+          <span data-utc-time="<%= @sync_source.display_name_updated_at.iso8601 %>">
+            <%= @sync_source.display_name_updated_at.strftime("%b %d, %Y %I:%M %p UTC") %>
+          </span>
+        </div>
+      </div>
+    <% end %>
+  <% end %>
+  
   <div class="detail-row">
     <div class="detail-label">Source Type</div>
     <div class="detail-value"><%= @sync_source.source %></div>

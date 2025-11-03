@@ -2,11 +2,15 @@ module Pollers
   class AirtableToLoops
     require_relative "../../lib/email_normalizer"
     
+    DISPLAY_NAME_UPDATE_INTERVAL = 24.hours
+    
     def call(sync_source)
       base_id = sync_source.source_id
       poll_start_time = Time.current.utc
       
       log_header("Processing Airtable Base: #{base_id}")
+      
+      update_display_name_if_stale(sync_source, base_id)
       
       # Get all tables for the base
       tables = AirtableService::Bases.get_schema(base_id: base_id)
@@ -343,6 +347,30 @@ module Pollers
       metadata['known_loops_fields'] ||= {}
       metadata['known_loops_fields'][table_id] = current_field_ids
       sync_source.update_columns(metadata: metadata)
+    end
+
+    def update_display_name_if_stale(sync_source, base_id)
+      return unless sync_source.is_a?(AirtableSyncSource)
+      
+      # Check if we need to update display_name
+      should_update = sync_source.display_name_updated_at.nil? ||
+                      sync_source.display_name_updated_at < DISPLAY_NAME_UPDATE_INTERVAL.ago
+      
+      return unless should_update
+      
+      begin
+        base = AirtableService::Bases.find_by_id(base_id: base_id)
+        if base && base["name"]
+          sync_source.update_columns(
+            display_name: base["name"],
+            display_name_updated_at: Time.current
+          )
+          log_info("Updated display_name to: #{base["name"]}")
+        end
+      rescue => e
+        # Log error but don't fail the poll if name update fails
+        log_error("Failed to update display_name: #{e.class.name} - #{e.message}")
+      end
     end
   end
 end

@@ -33,6 +33,20 @@ class SyncSourcesController < ApplicationController
     @sync_source = AirtableSyncSource.new(sync_source_params)
     @sync_source.source = 'airtable'
     
+    # Set display_name from Airtable base name if available
+    if @sync_source.source_id.present?
+      begin
+        base = AirtableService::Bases.find_by_id(base_id: @sync_source.source_id)
+        if base && base["name"]
+          @sync_source.display_name = base["name"]
+          @sync_source.display_name_updated_at = Time.current
+        end
+      rescue => e
+        # Log error but don't fail creation if we can't fetch base name
+        Rails.logger.warn("Failed to fetch base name for #{@sync_source.source_id}: #{e.message}")
+      end
+    end
+    
     if @sync_source.save
       redirect_to sync_source_path(@sync_source), notice: 'Sync source was successfully created.'
     else

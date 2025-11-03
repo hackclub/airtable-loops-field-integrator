@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_11_02_213600) do
+ActiveRecord::Schema[8.0].define(version: 2025_11_03_191033) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -100,6 +100,8 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_02_213600) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.jsonb "metadata", default: {}, null: false
+    t.string "display_name"
+    t.datetime "display_name_updated_at"
     t.index ["next_poll_at"], name: "index_sync_sources_on_next_poll_at"
     t.index ["source", "source_id"], name: "index_sync_sources_on_source_and_source_id", unique: true
   end

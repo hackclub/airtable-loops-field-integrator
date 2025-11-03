@@ -156,6 +156,13 @@ class AirtableService
       end
     end
 
+    def self.find_by_id(base_id:)
+      find_each do |base|
+        return base if base["id"] == base_id
+      end
+      nil
+    end
+
     def self.get_schema(base_id:, include_visible_field_ids: false)
       url = "#{META_API_URL}/bases/#{base_id}/tables"
       url += "?include[]=visibleFieldIds" if include_visible_field_ids
