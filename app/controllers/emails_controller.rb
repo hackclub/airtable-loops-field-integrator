@@ -9,11 +9,12 @@ class EmailsController < ApplicationController
   end
 
   def show
-    require 'uri'
-    # Rails automatically URL-decodes params, but + characters might have become spaces
-    # Get the email from the request path directly to avoid Rails' automatic decoding
-    path_segment = request.path.split('/').last
-    @email = URI.decode_www_form_component(path_segment)
+    # Rails automatically URL-decodes params
+    # For wildcard routes, params[:email] is a string (emails don't contain slashes)
+    email_from_params = params[:email].is_a?(Array) ? params[:email].join('/') : params[:email].to_s
+    
+    # Normalize the email to match how it's stored in the database (lowercase, trimmed)
+    @email = EmailNormalizer.normalize(email_from_params)
     
     audits = LoopsContactChangeAudit.for_email(@email).order(occurred_at: :desc)
     

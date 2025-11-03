@@ -36,6 +36,25 @@
     font-size: 12px;
     margin-bottom: 10px;
   }
+  .nav {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #ddd;
+  }
+  .nav a {
+    color: #007bff;
+    text-decoration: none;
+    margin-right: 20px;
+    font-weight: 500;
+    font-size: 12px;
+  }
+  .nav a:hover {
+    text-decoration: underline;
+  }
+  .nav a.active {
+    color: #333;
+    font-weight: 600;
+  }
   .back-link {
     display: inline-block;
     margin-bottom: 8px;
@@ -147,6 +166,11 @@
     });
   });
 </script>
+
+<div class="nav">
+  <%= link_to "Email Audit Logs", emails_path, class: (request.path == emails_path ? "active" : "") %>
+  <%= link_to "Sync Sources", sync_sources_path, class: (request.path.start_with?("/sync_sources") ? "active" : "") %>
+</div>
 
 <%= link_to "← Back", emails_path, class: "back-link" %>
 

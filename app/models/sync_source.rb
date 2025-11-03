@@ -4,6 +4,7 @@ class SyncSource < ApplicationRecord
   self.inheritance_column = :source
 
   validates :source, :source_id, presence: true
+  validates :source_id, uniqueness: { scope: :source, message: "already has a sync source" }
   enum :source, { airtable: "airtable" } # add other sources as needed
 
   has_many :field_value_baselines, dependent: :destroy
