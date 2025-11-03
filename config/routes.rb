@@ -15,14 +15,10 @@ Rails.application.routes.draw do
 
   # Email audit log viewer
   get 'emails', to: 'emails#index'
-  get 'emails/*email', to: 'emails#show', as: 'email_audit_log', format: false
+  get 'emails/:email', to: 'emails#show', as: 'email_audit_log'
   
   # Sync sources management
-  resources :sync_sources do
-    member do
-      post :resync
-    end
-  end
+  resources :sync_sources
   
   root 'emails#index'
 end
