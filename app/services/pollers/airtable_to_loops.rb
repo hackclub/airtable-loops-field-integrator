@@ -80,8 +80,8 @@ module Pollers
       
       log_info("Processing #{records.size} record(s) for change detection")
       
-      # Detect changed values - pass full table schema to detect ANY field changes
-      changed_records = detect_changes(sync_source, base_id, table_id, records, table, email_field)
+      # Detect changed values - only create baselines for Loops fields
+      changed_records = detect_changes(sync_source, base_id, table_id, records, table, email_field, loops_fields)
       
       # Process changed records
       process_changed_records(sync_source.id, table_id, changed_records, loops_fields)
@@ -223,16 +223,8 @@ module Pollers
       end
     end
 
-    def detect_changes(sync_source, base_id, table_id, records, table, email_field)
+    def detect_changes(sync_source, base_id, table_id, records, table, email_field, loops_fields)
       changed_records = []
-      
-      # Get all fields from table schema
-      all_fields = {}
-      if table && table["fields"]
-        table["fields"].each do |field|
-          all_fields[field["name"]] = field
-        end
-      end
       
       records.each do |record|
         record_id = record["id"]
@@ -240,11 +232,9 @@ module Pollers
         record_fields = record["fields"] || {}
         changed_values = {}
         
-        # Iterate through schema fields instead of record_fields
-        # This ensures we check all fields, including Airtable fields that might be null
-        # (null fields are omitted from record_fields by Airtable)
-        all_fields.each do |field_name, field|
-          field_id = field["id"]
+        # Only iterate through Loops fields - we only create baselines for Loops fields
+        loops_fields.each do |field_id, field|
+          field_name = field["name"]
           field_id_key = field_identifier(field_id, field_name)
           
           # Get current value from record_fields (nil if not present, meaning field is null/empty)
