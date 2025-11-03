@@ -66,12 +66,12 @@ class LoopsServiceTest < ActiveSupport::TestCase
   end
 
   test "normalize_email lowercases and trims whitespace" do
-    assert_equal "test@example.com", LoopsService.send(:normalize_email, "Test@Example.com")
-    assert_equal "test@example.com", LoopsService.send(:normalize_email, "  Test@Example.com  ")
-    assert_equal "test@example.com", LoopsService.send(:normalize_email, "TEST@EXAMPLE.COM")
-    assert_equal "test@example.com", LoopsService.send(:normalize_email, "  TEST@EXAMPLE.COM  ")
-    assert_equal "", LoopsService.send(:normalize_email, "   ")
-    assert_equal "", LoopsService.send(:normalize_email, "")
+    assert_equal "test@example.com", EmailNormalizer.normalize("Test@Example.com")
+    assert_equal "test@example.com", EmailNormalizer.normalize("  Test@Example.com  ")
+    assert_equal "test@example.com", EmailNormalizer.normalize("TEST@EXAMPLE.COM")
+    assert_equal "test@example.com", EmailNormalizer.normalize("  TEST@EXAMPLE.COM  ")
+    assert_nil EmailNormalizer.normalize("   ")
+    assert_nil EmailNormalizer.normalize("")
   end
 
   test "create_contact normalizes email" do
