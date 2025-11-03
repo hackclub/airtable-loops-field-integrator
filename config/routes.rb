@@ -13,6 +13,8 @@ Rails.application.routes.draw do
   require 'sidekiq/web'
   mount Sidekiq::Web => '/sidekiq'
 
-  # Defines the root path route ("/")
-  # root "posts#index"
+  # Email audit log viewer
+  get 'emails', to: 'emails#index'
+  get 'emails/:email', to: 'emails#show', as: 'email_audit_log'
+  root 'emails#index'
 end
