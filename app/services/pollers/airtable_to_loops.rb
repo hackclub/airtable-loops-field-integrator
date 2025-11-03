@@ -102,13 +102,22 @@ module Pollers
     def find_loops_fields(table)
       return {} unless table["fields"]
       
-      loops_pattern = /\ALoops\s*-\s*[a-z][a-zA-Z0-9]*\z/
+      # Match fields starting with "Loops - " or "Loops - Override - "
+      # Field name must be lowerCamelCase (starts with lowercase letter)
+      # Examples: "Loops - tmpZachLoopsApiTest", "Loops - Override - tmpZachLoopsApiTest2"
+      # Does NOT match: "Loops - Lists" (starts with uppercase)
+      loops_pattern = /\ALoops\s*-\s*(Override\s*-\s*)?[a-z][a-zA-Z0-9]*\z/i
       
       loops_fields = {}
       table["fields"].each do |field|
         field_name = field["name"] || ""
+        # Check case-insensitively for "Loops" prefix, but field name must start lowercase
         if field_name.strip.match?(loops_pattern)
-          loops_fields[field["id"]] = field
+          # Double-check: after removing prefix, first char must be lowercase
+          field_name_without_prefix = field_name.sub(/\ALoops\s*-\s*(Override\s*-\s*)?/i, "")
+          if field_name_without_prefix =~ /\A[a-z]/
+            loops_fields[field["id"]] = field
+          end
         end
       end
       
@@ -143,8 +152,20 @@ module Pollers
         if cursor_timestamp
           # Cursor is stored as JSONB string (ISO8601 timestamp)
           # Rails automatically deserializes JSONB strings to Ruby strings
-          cursor_time = cursor_timestamp.to_s
-          time_condition = "OR(LAST_MODIFIED_TIME() > \"#{cursor_time}\", CREATED_TIME() > \"#{cursor_time}\")"
+          cursor_time_str = cursor_timestamp.to_s
+          
+          # Parse cursor time and subtract 5 minutes to account for propagation delays
+          # Sometimes changes haven't fully propagated by the time we make the API request
+          begin
+            cursor_time = Time.parse(cursor_time_str).utc - 5.minutes
+            cursor_time_adjusted = cursor_time.iso8601(3)
+          rescue => e
+            # If parsing fails, fall back to original cursor time
+            log_error("Failed to parse cursor timestamp: #{e.message}, using original: #{cursor_time_str}")
+            cursor_time_adjusted = cursor_time_str
+          end
+          
+          time_condition = "OR(LAST_MODIFIED_TIME() > \"#{cursor_time_adjusted}\", CREATED_TIME() > \"#{cursor_time_adjusted}\")"
           conditions << time_condition
         end
       end
@@ -205,7 +226,7 @@ module Pollers
     def detect_changes(sync_source, base_id, table_id, records, table, email_field)
       changed_records = []
       
-      # Get all fields from table schema for field ID lookup
+      # Get all fields from table schema
       all_fields = {}
       if table && table["fields"]
         table["fields"].each do |field|
@@ -219,16 +240,15 @@ module Pollers
         record_fields = record["fields"] || {}
         changed_values = {}
         
-        # Check ALL fields in the record, not just Loops fields
-        # This allows any field change to trigger the job
-        record_fields.each do |field_name, current_value|
-          # Find the field definition to get field_id
-          field = all_fields[field_name]
-          
-          # If field not found in schema, create a synthetic field identifier
-          # This allows any field change to be detected
-          field_id = field ? field["id"] : "fld#{field_name.hash.abs}"
+        # Iterate through schema fields instead of record_fields
+        # This ensures we check all fields, including Airtable fields that might be null
+        # (null fields are omitted from record_fields by Airtable)
+        all_fields.each do |field_name, field|
+          field_id = field["id"]
           field_id_key = field_identifier(field_id, field_name)
+          
+          # Get current value from record_fields (nil if not present, meaning field is null/empty)
+          current_value = record_fields[field_name]
           
           result = FieldValueBaseline.detect_change(
             sync_source: sync_source,

@@ -51,7 +51,7 @@ class LoopsDispatchWorker
       
       lock_acquired = result.first["pg_try_advisory_lock"]
       unless lock_acquired
-        Rails.logger.info("LoopsDispatchWorker: Skipping #{email_normalized} - already processing")
+        Rails.logger.debug("LoopsDispatchWorker: Skipping #{email_normalized} - already processing")
         return
       end
 
@@ -86,18 +86,50 @@ class LoopsDispatchWorker
         end
 
         # Call LoopsService.update_contact (rate limiting handled internally)
+        # All payload data is stored in DB: envelope.payload (what was queued),
+        # audit records (what was sent + response), and baselines (what was persisted)
         request_id = nil
+        response = nil
         begin
           response = LoopsService.update_contact(email: email_normalized, **loops_payload)
-          request_id = response&.dig("request_id") || SecureRandom.uuid
+          
+          # Fix response parsing: Loops API returns {"success"=>true, "id"=>"..."}
+          # Use "id" as request_id if present, otherwise generate UUID
+          request_id = response&.dig("id") || response&.dig("request_id") || SecureRandom.uuid
+          
+          # Validate that the update actually succeeded
+          # Loops API returns {"success"=>true, "id"=>"..."} on success
+          unless response && response["success"] == true
+            error_msg = "Loops API update did not succeed. Response: #{response.inspect}"
+            Rails.logger.error("LoopsDispatchWorker: #{error_msg}")
+            
+            # Mark envelopes as failed and store full error details in DB for debugging
+            envelopes.each do |envelope|
+              envelope.update!(
+                status: :failed,
+                error: {
+                  message: error_msg,
+                  response: response,
+                  loops_payload_sent: loops_payload,  # Store what was actually sent
+                  occurred_at: Time.current.iso8601
+                }
+              )
+            end
+            raise StandardError.new(error_msg)
+          end
         rescue => e
-          # Mark envelopes as failed
+          # Mark envelopes as failed and store full error details in DB for debugging
+          Rails.logger.error("LoopsDispatchWorker: Error updating Loops contact: #{e.class} - #{e.message}")
+          Rails.logger.error("LoopsDispatchWorker: Error backtrace: #{e.backtrace.first(5).join("\n")}")
+          
           envelopes.each do |envelope|
             envelope.update!(
               status: :failed,
               error: {
                 message: e.message,
                 class: e.class.name,
+                loops_payload_sent: loops_payload,  # Store what was actually sent
+                backtrace: e.backtrace.first(10),  # Store backtrace for debugging
                 occurred_at: Time.current.iso8601
               }
             )
@@ -125,11 +157,18 @@ class LoopsDispatchWorker
               field_data_hash = field_data.is_a?(Hash) ? field_data : {}
               value_to_send = loops_payload[field_name]  # Use the value that was actually sent to Loops
               
-              # Update baseline
-              baseline.update_sent_value(
-                value: value_to_send,
-                expires_in_days: 90
-              )
+              # Validate that the API call succeeded before updating baseline
+              # This ensures baseline only reflects values that were actually persisted in Loops
+              if response && response["success"] == true
+                # Update baseline only after confirming successful API update
+                baseline.update_sent_value(
+                  value: value_to_send,
+                  expires_in_days: 90
+                )
+              else
+                Rails.logger.error("LoopsDispatchWorker: NOT updating baseline for #{field_name} - API call did not succeed")
+                # Don't update baseline if API call failed
+              end
 
               # Create audit record
               # Find provenance from first envelope (they should all have same provenance per email)
@@ -158,22 +197,33 @@ class LoopsDispatchWorker
                 audit_provenance["sync_source_metadata"] = provenance["sync_source_metadata"]
               end
 
-              LoopsContactChangeAudit.create!(
-                occurred_at: Time.current,
-                email_normalized: email_normalized,
-                field_name: field_name,
-                former_loops_value: former_loops_value,
-                new_loops_value: value_to_send,  # Use the value that was actually sent
-                former_sync_source_value: field_provenance&.dig("former_sync_source_value"),
-                new_sync_source_value: field_provenance&.dig("new_sync_source_value"),
-                strategy: (field_data_hash[:strategy] || field_data_hash["strategy"] || :upsert).to_s,
-                sync_source_id: provenance["sync_source_id"],
-                sync_source_table_id: provenance["sync_source_table_id"],
-                sync_source_record_id: provenance["sync_source_record_id"],
-                sync_source_field_id: field_provenance&.dig("sync_source_field_id"),
-                provenance: audit_provenance,
-                request_id: request_id
-              )
+              # Create audit record only if API call succeeded
+              # Store all debugging data: old/new values, request_id, provenance, response, and payload sent
+              if response && response["success"] == true
+                # Store response and full payload sent in provenance for debugging
+                audit_provenance_with_response = audit_provenance.dup
+                audit_provenance_with_response["loops_api_response"] = response
+                audit_provenance_with_response["loops_payload_sent"] = loops_payload  # Store full payload that was sent
+                
+                LoopsContactChangeAudit.create!(
+                  occurred_at: Time.current,
+                  email_normalized: email_normalized,
+                  field_name: field_name,
+                  former_loops_value: former_loops_value,
+                  new_loops_value: value_to_send,  # Use the value that was actually sent
+                  former_sync_source_value: field_provenance&.dig("former_sync_source_value"),
+                  new_sync_source_value: field_provenance&.dig("new_sync_source_value"),
+                  strategy: (field_data_hash[:strategy] || field_data_hash["strategy"] || :upsert).to_s,
+                  sync_source_id: provenance["sync_source_id"],
+                  sync_source_table_id: provenance["sync_source_table_id"],
+                  sync_source_record_id: provenance["sync_source_record_id"],
+                  sync_source_field_id: field_provenance&.dig("sync_source_field_id"),
+                  provenance: audit_provenance_with_response,
+                  request_id: request_id
+                )
+              else
+                Rails.logger.warn("LoopsDispatchWorker: NOT creating audit record for #{field_name} - API call did not succeed")
+              end
             else
               filtered_fields << field_name
             end
@@ -239,18 +289,27 @@ class LoopsDispatchWorker
   end
 
   # Filter by loops_field_baselines: drop fields whose value equals baseline and hasn't expired
+  # For :override strategy fields, always include (even if value matches baseline)
   def filter_by_baselines(email_normalized, merged_payload)
     filtered = {}
     
     merged_payload.each do |field_name, field_data|
+      # Handle both string and symbol keys
+      field_data_hash = field_data.is_a?(Hash) ? field_data : {}
+      current_value = field_data_hash[:value] || field_data_hash["value"]
+      strategy = (field_data_hash[:strategy] || field_data_hash["strategy"])&.to_sym || :upsert
+      
+      # For override strategy, always include (even if value matches baseline)
+      # This allows override fields to explicitly set null values
+      if strategy == :override
+        filtered[field_name] = field_data
+        next
+      end
+      
       baseline = LoopsFieldBaseline.find_by(
         email_normalized: email_normalized,
         field_name: field_name
       )
-      
-      # Handle both string and symbol keys
-      field_data_hash = field_data.is_a?(Hash) ? field_data : {}
-      current_value = field_data_hash[:value] || field_data_hash["value"]
       
       if baseline.nil?
         # No baseline - include field

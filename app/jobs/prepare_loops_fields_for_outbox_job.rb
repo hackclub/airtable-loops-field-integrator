@@ -34,14 +34,13 @@ class PrepareLoopsFieldsForOutboxJob
   # - :override: Always update, even if value is nil
   #
   # Field name mapping:
-  # - Sync source field names (e.g., "Loops - tmpZachLoopsApiTest") should be mapped
-  #   to Loops field names (e.g., "tmpZachLoopsApiTest") by stripping prefixes
-  # - This mapping logic will be implemented later
+  # - Sync source field names are mapped to Loops field names by stripping prefixes:
+  #   - "Loops - tmpZachLoopsApiTest" → "tmpZachLoopsApiTest" (strategy: :upsert)
+  #   - "Loops - Override - tmpZachLoopsApiTest2" → "tmpZachLoopsApiTest2" (strategy: :override)
+  # - Strategy is determined by the presence of "Override" in the field name
 
   def perform(email, sync_source_id, table_id, record_id, changed_fields)
-    # ALWAYS use test values regardless of input parameters
-    # This ensures any Airtable row edit triggers the same test envelope
-    #
+    # Process all Loops fields from changed_fields
     # changed_fields format:
     # {
     #   "field_id/field_name" => {
@@ -51,24 +50,61 @@ class PrepareLoopsFieldsForOutboxJob
     #   }
     # }
     
-    # Test values (hardcoded):
-    test_email = EmailNormalizer.normalize(email)
-    test_field_name = "Loops - tmpZachLoopsApiTest"
-    # changed fields is {"fldMXhauv0JDKMq6h/Loops - tmpZachLoopsApiTest"=>{"value"=>"hi12", "old_value"=>"hi123", "modified_at"=>"2025-11-02T21:44:14Z"}}
-    # set test_value to the value of the changed_fields
-    test_field_data = changed_fields["fldMXhauv0JDKMq6h/Loops - tmpZachLoopsApiTest"]
-    test_value = test_field_data["value"]
-    test_field_id = "fldTest789"
-    
-    # Normalize test email
-    email_normalized = EmailNormalizer.normalize(test_email)
+    # Normalize email
+    email_normalized = EmailNormalizer.normalize(email)
     return unless email_normalized
 
-    # Create output envelope with test values (ignore input parameters)
-    envelope = build_test_envelope_with_fixed_values(test_field_id, test_field_name, test_value)
+    # Build envelope by processing all Loops fields from changed_fields
+    envelope = {}
+    provenance_fields = []
 
-    # Build provenance with test values (use input sync_source_id for reference)
-    provenance = build_test_provenance(sync_source_id, table_id, record_id, test_field_id, test_field_name, test_value)
+    changed_fields.each do |field_key, field_data|
+      # Extract field name from key (format: "field_id/field_name")
+      field_name = field_key.split("/", 2).last
+      
+      # Skip if not a Loops field (must start with "Loops - " or "Loops - Override - ")
+      next unless field_name =~ /\ALoops\s*-\s*/i
+      
+      # Extract field name without prefix to check if it's lowerCamelCase
+      field_name_without_prefix = field_name.sub(/\ALoops\s*-\s*(Override\s*-\s*)?/i, "")
+      
+      # Skip if field name doesn't start with lowercase (not lowerCamelCase)
+      # This prevents matching fields like "Loops - Lists" which starts with uppercase
+      next unless field_name_without_prefix =~ /\A[a-z]/
+      
+      # Extract field_id from key
+      field_id = field_key.split("/", 2).first
+      
+      # Map field name and determine strategy
+      loops_field_name, strategy = map_field_name_and_strategy(field_name)
+      
+      # Extract values
+      value = field_data["value"]
+      old_value = field_data["old_value"]
+      modified_at = field_data["modified_at"] || Time.current.iso8601
+      
+      # Add to envelope
+      envelope[loops_field_name] = {
+        value: value,
+        strategy: strategy,
+        modified_at: modified_at
+      }
+      
+      # Add to provenance fields
+      provenance_fields << {
+        sync_source_field_id: field_id,
+        sync_source_field_name: field_name,
+        former_sync_source_value: old_value,
+        new_sync_source_value: value,
+        modified_at: modified_at
+      }
+    end
+
+    # Skip if no Loops fields found
+    return if envelope.empty?
+
+    # Build provenance
+    provenance = build_provenance(sync_source_id, table_id, record_id, provenance_fields)
 
     # Write to outbox
     LoopsOutboxEnvelope.create!(
@@ -82,35 +118,32 @@ class PrepareLoopsFieldsForOutboxJob
 
   private
 
-  # Build test envelope with fixed test values (ignores input parameters)
-  def build_test_envelope_with_fixed_values(field_id, field_name, value)
-    # Map field name: strip "Loops - " prefix
-    loops_field_name = field_name.sub(/\ALoops\s*-\s*/i, "")
+  # Map sync source field name to Loops field name and determine strategy
+  # Examples:
+  #   "Loops - tmpZachLoopsApiTest" → ["tmpZachLoopsApiTest", :upsert]
+  #   "Loops - Override - tmpZachLoopsApiTest2" → ["tmpZachLoopsApiTest2", :override]
+  def map_field_name_and_strategy(field_name)
+    # Check if field name contains "Override"
+    has_override = field_name =~ /\ALoops\s*-\s*Override\s*-\s*/i
     
-    # Build envelope entry according to the documented format with test values
-    {
-      loops_field_name => {
-        value: value,
-        strategy: :upsert,
-        modified_at: Time.current.iso8601
-      }
-    }
+    if has_override
+      # Strip "Loops - Override - " prefix
+      loops_field_name = field_name.sub(/\ALoops\s*-\s*Override\s*-\s*/i, "")
+      strategy = :override
+    else
+      # Strip "Loops - " prefix
+      loops_field_name = field_name.sub(/\ALoops\s*-\s*/i, "")
+      strategy = :upsert
+    end
+    
+    [loops_field_name, strategy]
   end
 
-  # Build test provenance with fixed test values (uses input sync_source_id for reference)
-  def build_test_provenance(sync_source_id, table_id, record_id, field_id, field_name, value)
+  # Build provenance metadata
+  def build_provenance(sync_source_id, table_id, record_id, fields_array)
     sync_source = SyncSource.find_by(id: sync_source_id)
     sync_source_type = sync_source&.source || "unknown"
     
-    # Build field provenance with test values
-    fields_array = [{
-      sync_source_field_id: field_id,
-      sync_source_field_name: field_name,
-      former_sync_source_value: nil,  # Always nil for test
-      new_sync_source_value: value,
-      modified_at: Time.current.iso8601
-    }]
-
     provenance = {
       sync_source_id: sync_source_id,
       sync_source_type: sync_source_type,
