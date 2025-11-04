@@ -64,8 +64,23 @@ class LoopsDispatchWorker
 
         return if envelopes.empty?
 
+        # Determine sync_source for this email batch
+        sync_source = envelopes.first&.sync_source || SyncSource.find_by(id: envelopes.first&.provenance&.dig("sync_source_id"))
+
+        # Preflight: check if contact exists and load baselines if needed
+        contact_exists = sync_source ? LoopsFieldBaseline.check_contact_existence_and_load_baselines(email_normalized: email_normalized) : true
+
         # Merge envelopes: combine payloads, latest modified_at wins per field
         merged_payload = merge_envelopes(envelopes)
+
+        # If new contact, inject initial fields BEFORE baseline filtering
+        if sync_source && !contact_exists
+          initial_fields = LoopsFieldBaseline.initial_payload_for_new_contact(sync_source)
+          initial_fields.each do |field_name, field_data|
+            # Only add if not already present (queued envelopes take precedence)
+            merged_payload[field_name] ||= field_data
+          end
+        end
 
         # Filter by loops_field_baselines AFTER merging
         filtered_payload = filter_by_baselines(email_normalized, merged_payload)

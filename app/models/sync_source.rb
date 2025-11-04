@@ -27,6 +27,15 @@ class SyncSource < ApplicationRecord
       super
     end
   end
+
+  # Returns display name from metadata or source_id fallback
+  def humanized_name
+    display_name ||
+      metadata["display_name"] ||
+      metadata["name"] ||
+      metadata["base_name"] ||
+      source_id
+  end
 end
 
 
