@@ -26,36 +26,31 @@ services:
   web:
     build: .
     command: bundle exec rails s -b 0.0.0.0
-    volumes:
-      - .:/app
-    ports:
-      - "3000:3000"
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://${SERVICE_USER_DB}:${SERVICE_PASSWORD_64_DB}@db:5432/postgres}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://$SERVICE_USER_DB:$SERVICE_PASSWORD_64_DB@db:5432/postgres}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - RAILS_ENV=production
       - SECRET_KEY_BASE=${SERVICE_BASE64_64_APP}
       - AIRTABLE_PERSONAL_ACCESS_TOKEN=${AIRTABLE_PERSONAL_ACCESS_TOKEN:?}
       - LOOPS_API_KEY=${LOOPS_API_KEY:?}
-      - SERVICE_URL_WEB
+      - SERVICE_URL_WEB_3000
+      - APP_FQDN=${SERVICE_FQDN_WEB}
       - RAILS_LOG_LEVEL=${RAILS_LOG_LEVEL:-info}
 
   sidekiq:
     build: .
     command: bundle exec sidekiq -C config/sidekiq.yml
-    volumes:
-      - .:/app
     depends_on:
       - db
       - redis
       - web
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://${SERVICE_USER_DB}:${SERVICE_PASSWORD_64_DB}@db:5432/postgres}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://$SERVICE_USER_DB:$SERVICE_PASSWORD_64_DB@db:5432/postgres}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - RAILS_ENV=production
       - SECRET_KEY_BASE=${SERVICE_BASE64_64_APP}
@@ -65,6 +60,6 @@ services:
       - RAILS_LOG_LEVEL=${RAILS_LOG_LEVEL:-info}
 
 volumes:
-  airtable_loops_field_integrator_postgres_data:
-  airtable_loops_field_integrator_redis_data:
+  postgres_data:
+  redis_data:
 

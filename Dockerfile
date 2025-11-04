@@ -38,6 +38,9 @@ ENV PATH="/usr/local/bin:/usr/local/bundle/ruby/3.3.0/bin:${PATH}"
 COPY entrypoint.sh /usr/bin/
 RUN chmod +x /usr/bin/entrypoint.sh
 
+# Copy application code (required for production images without bind mounts)
+COPY . .
+
 ENTRYPOINT ["entrypoint.sh"]
 
 # Expose port
