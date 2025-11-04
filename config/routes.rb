@@ -9,19 +9,16 @@ Rails.application.routes.draw do
   # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
-  # Defines the root path route ("/")
-  root "full_refresh#index"
+  # Sidekiq Web UI
+  require 'sidekiq/web'
+  mount Sidekiq::Web => '/sidekiq'
 
-  mount GoodJob::Engine => '/good_job'
-
-  # Airtable webhook endpoint
-  post 'airtable/webhook', to: 'airtable/webhooks#receive'
+  # Email audit log viewer
+  get 'emails', to: 'emails#index'
+  get 'emails/:email', to: 'emails#show', as: 'email_audit_log'
   
-  # API routes
-  namespace :api do
-    post 'convert_address_to_parts', to: 'address#convert_to_parts'
-  end
-
-  # Full refresh routes
-  resources :full_refresh, only: [:index, :create]
+  # Sync sources management
+  resources :sync_sources
+  
+  root 'emails#index'
 end

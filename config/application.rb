@@ -1,18 +1,6 @@
 require_relative "boot"
 
-require "rails"
-# Pick the frameworks you want:
-require "active_model/railtie"
-require "active_job/railtie"
-require "active_record/railtie"
-require "active_storage/engine"
-require "action_controller/railtie"
-require "action_mailer/railtie"
-require "action_mailbox/engine"
-require "action_text/engine"
-require "action_view/railtie"
-require "action_cable/engine"
-# require "rails/test_unit/railtie"
+require "rails/all"
 
 # Require the gems listed in Gemfile, including any gems
 # you've limited to :test, :development, or :production.
@@ -35,27 +23,5 @@ module App
     #
     # config.time_zone = "Central Time (US & Canada)"
     # config.eager_load_paths << Rails.root.join("extras")
-
-    # Don't generate system test files.
-    config.generators.system_tests = nil
-
-    # Use GoodJob as the queue adapter
-    config.active_job.queue_adapter = :good_job
-    config.good_job.preserve_job_records = false
-    config.good_job.enable_cron = true
-    config.good_job.cron_graceful_restart_period = 1.minute
-    config.good_job.cron = {
-      daily_webhook_refresh: {
-        cron: "0 9 * * *",
-        class: "CronDailyWebhookRefreshAllJob",
-        description: "Refresh all webhooks daily"
-      },
-      webhook_polling_setup: {
-        cron: "* * * * *",
-        class: "WebhookPollingSetupJob",
-        description: "Setup webhooks for any missing bases every minute",
-        enabled_by_default: -> { Rails.env.production? } # Only enable in production, otherwise can be enabled manually through Dashboard
-      }
-    }
   end
 end

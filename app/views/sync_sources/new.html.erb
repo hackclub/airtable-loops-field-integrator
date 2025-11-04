@@ -1,0 +1,204 @@
+<% content_for :title, "New Sync Source" %>
+
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+    line-height: 1.6;
+  }
+  h1 {
+    color: #333;
+    margin-bottom: 30px;
+  }
+  .nav {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #ddd;
+  }
+  .nav a {
+    color: #007bff;
+    text-decoration: none;
+    margin-right: 20px;
+    font-weight: 500;
+  }
+  .nav a:hover {
+    text-decoration: underline;
+  }
+  .nav a.active {
+    color: #333;
+    font-weight: 600;
+  }
+  .back-link {
+    display: inline-block;
+    margin-bottom: 20px;
+    color: #007bff;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .back-link:hover {
+    text-decoration: underline;
+  }
+  .form-group {
+    margin-bottom: 20px;
+  }
+  label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: #333;
+  }
+  input[type="text"],
+  input[type="number"],
+  select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: inherit;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .form-actions {
+    margin-top: 30px;
+    display: flex;
+    gap: 10px;
+  }
+  .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+  }
+  .btn-primary {
+    background-color: #007bff;
+    color: #fff;
+  }
+  .btn-primary:hover {
+    background-color: #0056b3;
+  }
+  .btn-secondary {
+    background-color: #6c757d;
+    color: #fff;
+  }
+  .btn-secondary:hover {
+    background-color: #5a6268;
+  }
+  .field_with_errors {
+    display: inline-block;
+    width: 100%;
+  }
+  .field_with_errors input,
+  .field_with_errors select {
+    border-color: #dc3545;
+  }
+  .error-message {
+    color: #dc3545;
+    font-size: 14px;
+    margin-top: 4px;
+  }
+  .error-explanation {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 12px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    border-left: 4px solid #dc3545;
+  }
+  .error-explanation h2 {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+  }
+  .error-explanation ul {
+    margin: 0;
+    padding-left: 20px;
+  }
+  .help-text {
+    font-size: 13px;
+    color: #666;
+    margin-top: 4px;
+  }
+</style>
+
+<div class="nav">
+  <%= link_to "Email Audit Logs", emails_path, class: (request.path == emails_path ? "active" : "") %>
+  <%= link_to "Sync Sources", sync_sources_path, class: (request.path.start_with?("/sync_sources") ? "active" : "") %>
+</div>
+
+<%= link_to "← Back", sync_sources_path, class: "back-link" %>
+
+<h1>Create New Sync Source</h1>
+
+<% if @error %>
+  <div class="error-explanation">
+    <p><%= @error %></p>
+  </div>
+<% end %>
+
+<% if @sync_source.errors.any? %>
+  <div class="error-explanation">
+    <h2><%= pluralize(@sync_source.errors.count, "error") %> prohibited this sync source from being saved:</h2>
+    <ul>
+      <% @sync_source.errors.full_messages.each do |message| %>
+        <li><%= message %></li>
+      <% end %>
+    </ul>
+  </div>
+<% end %>
+
+<%= form_with model: @sync_source, url: sync_sources_path, local: true do |form| %>
+  <div class="form-group">
+    <%= form.label :source_id, "Airtable Base" %>
+    <% if @available_bases.any? %>
+      <%= form.select :source_id, 
+          options_for_select(
+            @available_bases.map { |b| [b["name"] || b["id"], b["id"]] },
+            @base_id || @sync_source.source_id
+          ),
+          { prompt: "Select a base..." },
+          { required: true } %>
+      <div class="help-text">Select an Airtable base to sync</div>
+    <% else %>
+      <%= form.text_field :source_id, value: @base_id || @sync_source.source_id, placeholder: "Enter base ID", required: true %>
+      <div class="help-text">Enter the Airtable base ID</div>
+    <% end %>
+    <% if @sync_source.errors[:source_id].any? %>
+      <div class="error-message"><%= @sync_source.errors[:source_id].first %></div>
+    <% end %>
+  </div>
+
+  <div class="form-group">
+    <%= form.label :poll_interval_seconds, "Poll Interval (seconds)" %>
+    <%= form.number_field :poll_interval_seconds, value: @sync_source.poll_interval_seconds || 30, min: 1, step: 1 %>
+    <div class="help-text">How often to poll this base (in seconds). Default: 30</div>
+    <% if @sync_source.errors[:poll_interval_seconds].any? %>
+      <div class="error-message"><%= @sync_source.errors[:poll_interval_seconds].first %></div>
+    <% end %>
+  </div>
+
+  <div class="form-group">
+    <%= form.label :poll_jitter, "Poll Jitter" %>
+    <%= form.number_field :poll_jitter, value: @sync_source.poll_jitter || 0.1, min: 0, max: 1, step: 0.01 %>
+    <div class="help-text">Random jitter factor (0.0 to 1.0) to avoid synchronized polling. Default: 0.1</div>
+    <% if @sync_source.errors[:poll_jitter].any? %>
+      <div class="error-message"><%= @sync_source.errors[:poll_jitter].first %></div>
+    <% end %>
+  </div>
+
+  <div class="form-actions">
+    <%= form.submit "Create Sync Source", class: "btn btn-primary" %>
+    <%= link_to "Cancel", sync_sources_path, class: "btn btn-secondary" %>
+  </div>
+<% end %>
+

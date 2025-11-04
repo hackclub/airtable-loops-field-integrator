@@ -1,0 +1,310 @@
+<% content_for :title, "Sync Source Details" %>
+
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+    line-height: 1.6;
+  }
+  h1 {
+    color: #333;
+    margin-bottom: 30px;
+  }
+  .nav {
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #ddd;
+  }
+  .nav a {
+    color: #007bff;
+    text-decoration: none;
+    margin-right: 20px;
+    font-weight: 500;
+  }
+  .nav a:hover {
+    text-decoration: underline;
+  }
+  .nav a.active {
+    color: #333;
+    font-weight: 600;
+  }
+  .back-link {
+    display: inline-block;
+    margin-bottom: 20px;
+    color: #007bff;
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .back-link:hover {
+    text-decoration: underline;
+  }
+  .details {
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .detail-row {
+    display: flex;
+    padding: 12px 0;
+    border-bottom: 1px solid #eee;
+  }
+  .detail-row:last-child {
+    border-bottom: none;
+  }
+  .detail-label {
+    font-weight: 600;
+    color: #333;
+    width: 200px;
+    flex-shrink: 0;
+  }
+  .detail-value {
+    color: #666;
+    flex: 1;
+  }
+  .detail-value code {
+    background-color: #f5f5f5;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 13px;
+  }
+  .actions {
+    margin-top: 20px;
+  }
+  .btn {
+    display: inline-block;
+    padding: 8px 16px;
+    text-decoration: none;
+    border-radius: 4px;
+    font-weight: 500;
+    margin-right: 10px;
+  }
+  .btn-primary {
+    background-color: #007bff;
+    color: #fff;
+  }
+  .btn-primary:hover {
+    background-color: #0056b3;
+    color: #fff;
+  }
+  .btn-danger {
+    background-color: #dc3545;
+    color: #fff;
+  }
+  .btn-danger:hover {
+    background-color: #c82333;
+    color: #fff;
+  }
+  pre {
+    background-color: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 12px;
+    overflow-x: auto;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .status-active {
+    background-color: #d4edda;
+    color: #155724;
+  }
+  .status-error {
+    background-color: #f8d7da;
+    color: #721c24;
+  }
+  .empty {
+    color: #999;
+    font-style: italic;
+  }
+</style>
+
+<div class="nav">
+  <%= link_to "Email Audit Logs", emails_path, class: (request.path == emails_path ? "active" : "") %>
+  <%= link_to "Sync Sources", sync_sources_path, class: (request.path.start_with?("/sync_sources") ? "active" : "") %>
+</div>
+
+<%= link_to "← Back to Sync Sources", sync_sources_path, class: "back-link" %>
+
+<h1>Sync Source Details</h1>
+
+<div class="details">
+  <div class="detail-row">
+    <div class="detail-label">Base ID</div>
+    <div class="detail-value"><code><%= @sync_source.source_id %></code></div>
+  </div>
+  
+  <% if @sync_source.display_name.present? %>
+    <div class="detail-row">
+      <div class="detail-label">Display Name</div>
+      <div class="detail-value"><%= @sync_source.display_name %></div>
+    </div>
+    
+    <% if @sync_source.display_name_updated_at.present? %>
+      <div class="detail-row">
+        <div class="detail-label">Display Name Updated</div>
+        <div class="detail-value">
+          <span data-utc-time="<%= @sync_source.display_name_updated_at.iso8601 %>">
+            <%= @sync_source.display_name_updated_at.strftime("%b %d, %Y %I:%M %p UTC") %>
+          </span>
+        </div>
+      </div>
+    <% end %>
+  <% end %>
+  
+  <div class="detail-row">
+    <div class="detail-label">Source Type</div>
+    <div class="detail-value"><%= @sync_source.source %></div>
+  </div>
+  
+  <div class="detail-row">
+    <div class="detail-label">Status</div>
+    <div class="detail-value">
+      <% if @sync_source.consecutive_failures > 0 %>
+        <span class="status-badge status-error">Error (<%= @sync_source.consecutive_failures %> failures)</span>
+      <% else %>
+        <span class="status-badge status-active">Active</span>
+      <% end %>
+    </div>
+  </div>
+  
+  <div class="detail-row">
+    <div class="detail-label">Poll Interval</div>
+    <div class="detail-value"><%= @sync_source.poll_interval_seconds %> seconds</div>
+  </div>
+  
+  <div class="detail-row">
+    <div class="detail-label">Poll Jitter</div>
+    <div class="detail-value"><%= (@sync_source.poll_jitter * 100).round %>%</div>
+  </div>
+  
+  <div class="detail-row">
+    <div class="detail-label">Next Poll</div>
+    <div class="detail-value">
+      <% if @sync_source.next_poll_at %>
+        <span data-utc-time="<%= @sync_source.next_poll_at.iso8601 %>">
+          <%= @sync_source.next_poll_at.strftime("%b %d, %Y %I:%M %p UTC") %>
+        </span>
+      <% else %>
+        <span class="empty">Not scheduled</span>
+      <% end %>
+    </div>
+  </div>
+  
+  <div class="detail-row">
+    <div class="detail-label">Last Poll Attempted</div>
+    <div class="detail-value">
+      <% if @sync_source.last_poll_attempted_at %>
+        <span data-utc-time="<%= @sync_source.last_poll_attempted_at.iso8601 %>">
+          <%= @sync_source.last_poll_attempted_at.strftime("%b %d, %Y %I:%M %p UTC") %>
+        </span>
+      <% else %>
+        <span class="empty">Never</span>
+      <% end %>
+    </div>
+  </div>
+  
+  <div class="detail-row">
+    <div class="detail-label">Last Successful Poll</div>
+    <div class="detail-value">
+      <% if @sync_source.last_successful_poll_at %>
+        <span data-utc-time="<%= @sync_source.last_successful_poll_at.iso8601 %>">
+          <%= @sync_source.last_successful_poll_at.strftime("%b %d, %Y %I:%M %p UTC") %>
+        </span>
+      <% else %>
+        <span class="empty">Never</span>
+      <% end %>
+    </div>
+  </div>
+  
+  <div class="detail-row">
+    <div class="detail-label">Consecutive Failures</div>
+    <div class="detail-value"><%= @sync_source.consecutive_failures %></div>
+  </div>
+  
+  <% if @sync_source.error_details.present? %>
+    <div class="detail-row">
+      <div class="detail-label">Error Details</div>
+      <div class="detail-value">
+        <pre><%= JSON.pretty_generate(@sync_source.error_details) %></pre>
+      </div>
+    </div>
+  <% end %>
+  
+  <% if @sync_source.cursor.present? %>
+    <div class="detail-row">
+      <div class="detail-label">Cursor</div>
+      <div class="detail-value">
+        <pre><%= JSON.pretty_generate(@sync_source.cursor) %></pre>
+      </div>
+    </div>
+  <% end %>
+  
+  <% if @sync_source.metadata.present? %>
+    <div class="detail-row">
+      <div class="detail-label">Metadata</div>
+      <div class="detail-value">
+        <pre><%= JSON.pretty_generate(@sync_source.metadata) %></pre>
+      </div>
+    </div>
+  <% end %>
+  
+  <div class="detail-row">
+    <div class="detail-label">Created At</div>
+    <div class="detail-value">
+      <span data-utc-time="<%= @sync_source.created_at.iso8601 %>">
+        <%= @sync_source.created_at.strftime("%b %d, %Y %I:%M %p UTC") %>
+      </span>
+    </div>
+  </div>
+  
+  <div class="detail-row">
+    <div class="detail-label">Updated At</div>
+    <div class="detail-value">
+      <span data-utc-time="<%= @sync_source.updated_at.iso8601 %>">
+        <%= @sync_source.updated_at.strftime("%b %d, %Y %I:%M %p UTC") %>
+      </span>
+    </div>
+  </div>
+</div>
+
+<div class="actions">
+  <%= link_to "Edit", edit_sync_source_path(@sync_source), class: "btn btn-primary" %>
+  <%= button_to "Delete", sync_source_path(@sync_source), 
+      method: :delete, 
+      data: { confirm: "Are you sure you want to delete this sync source?" }, 
+      class: "btn btn-danger",
+      style: "display: inline-block; margin-right: 10px;" %>
+</div>
+
+<script>
+  // Convert UTC timestamps to user's timezone
+  document.addEventListener('DOMContentLoaded', function() {
+    const timeElements = document.querySelectorAll('[data-utc-time]');
+    timeElements.forEach(function(el) {
+      const utcTime = el.getAttribute('data-utc-time');
+      const utcDate = new Date(utcTime);
+      const localTime = utcDate.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZoneName: 'short'
+      });
+      el.textContent = localTime;
+    });
+  });
+</script>
+

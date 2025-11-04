@@ -56,7 +56,17 @@ development:
 # Do not set this db to the same as development or production.
 test:
   <<: *default
+  # Use TEST_DATABASE_URL if set, otherwise use explicit config
+  # This ensures test DB is used even if DATABASE_URL points to development
+  <% if ENV["TEST_DATABASE_URL"] %>
+  url: <%= ENV["TEST_DATABASE_URL"] %>
+  <% else %>
   database: app_test
+  host: <%= ENV.fetch("DB_HOST", "db") rescue "db" %>
+  username: <%= ENV.fetch("DB_USERNAME", "postgres") rescue "postgres" %>
+  password: <%= ENV.fetch("DB_PASSWORD", "postgres") rescue "postgres" %>
+  port: <%= ENV.fetch("DB_PORT", "5432") rescue "5432" %>
+  <% end %>
 
 # As with config/credentials.yml, you never want to store sensitive information,
 # like your database password, in your source code. If your source code is
@@ -82,10 +92,8 @@ production:
   primary: &primary_production
     <<: *default
     database: app_production
-    host: <%= ENV["DB_HOST"] %>
-    username: <%= ENV["DB_USERNAME"] %>
-    password: <%= ENV["DB_PASSWORD"] %>
-    port: <%= ENV.fetch("DB_PORT", 5432) %>
+    username: app
+    password: <%= ENV["APP_DATABASE_PASSWORD"] %>
   cache:
     <<: *primary_production
     database: app_production_cache

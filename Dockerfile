@@ -1,72 +1,47 @@
-# syntax=docker/dockerfile:1
-# check=error=true
+FROM ruby:3.3
 
-# This Dockerfile is designed for production, not development. Use with Kamal or build'n'run by hand:
-# docker build -t app .
-# docker run -d -p 80:80 -e RAILS_MASTER_KEY=<value from config/master.key> --name app app
+# Install dependencies
+RUN apt-get update -qq && apt-get install -y \
+    postgresql-client \
+    nodejs \
+    npm \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
 
-# For a containerized dev environment, see Dev Containers: https://guides.rubyonrails.org/getting_started_with_devcontainer.html
+# Set working directory
+WORKDIR /app
 
-# Make sure RUBY_VERSION matches the Ruby version in .ruby-version
-ARG RUBY_VERSION=3.4.1
-FROM docker.io/library/ruby:$RUBY_VERSION-slim AS base
+# Install bundler (matching Gemfile.lock version)
+RUN gem install bundler -v 2.7.2
 
-# Rails app lives here
-WORKDIR /rails
+# Copy Gemfile and Gemfile.lock
+COPY Gemfile Gemfile.lock* ./
 
-# Install base packages
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y curl libjemalloc2 libvips postgresql-client && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+# Configure bundler to use system path
+RUN bundle config set --local path /usr/local/bundle
 
-# Set production environment
-ENV RAILS_ENV="production" \
-    BUNDLE_DEPLOYMENT="1" \
-    BUNDLE_PATH="/usr/local/bundle" \
-    BUNDLE_WITHOUT="development"
+# Install gems
+RUN bundle install --jobs 4 --retry 3
 
-# Throw-away build stage to reduce size of final image
-FROM base AS build
+# Create wrapper scripts for common Rails commands so they work without bundle exec
+RUN echo '#!/bin/bash\nbundle exec rails "$@"' > /usr/local/bin/rails && \
+    chmod +x /usr/local/bin/rails && \
+    echo '#!/bin/bash\nbundle exec rake "$@"' > /usr/local/bin/rake && \
+    chmod +x /usr/local/bin/rake && \
+    echo '#!/bin/bash\nbundle exec rspec "$@"' > /usr/local/bin/rspec && \
+    chmod +x /usr/local/bin/rspec
 
-# Install packages needed to build gems
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential git libpq-dev pkg-config && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+# Ensure /usr/local/bin comes before bundler's bin directory in PATH
+ENV PATH="/usr/local/bin:/usr/local/bundle/ruby/3.3.0/bin:${PATH}"
 
-# Install application gems
-COPY Gemfile Gemfile.lock ./
-RUN bundle install && \
-    rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git && \
-    bundle exec bootsnap precompile --gemfile
+# Copy entrypoint script
+COPY entrypoint.sh /usr/bin/
+RUN chmod +x /usr/bin/entrypoint.sh
 
-# Copy application code
-COPY . .
+ENTRYPOINT ["entrypoint.sh"]
 
-# Precompile bootsnap code for faster boot times
-RUN bundle exec bootsnap precompile app/ lib/
+# Expose port
+EXPOSE 3000
 
-# Precompiling assets for production without requiring secret RAILS_MASTER_KEY
-RUN SECRET_KEY_BASE_DUMMY=1 ./bin/rails assets:precompile
-
-
-
-
-# Final stage for app image
-FROM base
-
-# Copy built artifacts: gems, application
-COPY --from=build "${BUNDLE_PATH}" "${BUNDLE_PATH}"
-COPY --from=build /rails /rails
-
-# Run and own only the runtime files as a non-root user for security
-RUN groupadd --system --gid 1000 rails && \
-    useradd rails --uid 1000 --gid 1000 --create-home --shell /bin/bash && \
-    chown -R rails:rails db log storage tmp
-USER 1000:1000
-
-# Entrypoint prepares the database.
-ENTRYPOINT ["/rails/bin/docker-entrypoint"]
-
-# Start server via Thruster by default, this can be overwritten at runtime
-EXPOSE 80
-CMD ["./bin/thrust", "./bin/rails", "server"]
+# Default command
+CMD ["bundle", "exec", "rails", "server", "-b", "0.0.0.0"]

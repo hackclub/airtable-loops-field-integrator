@@ -1,7 +1,21 @@
 class AirtableService
-  API_TOKEN = Rails.application.credentials.airtable_personal_access_token
   API_URL = "https://api.airtable.com/v0"
   META_API_URL = "#{API_URL}/meta"
+
+  def self.api_token
+    ENV.fetch("AIRTABLE_PERSONAL_ACCESS_TOKEN")
+  end
+
+  # Get the global rate limiter (lazy initialization)
+  # Global: 50 requests per second across all bases
+  def self.global_rate_limiter
+    @global_rate_limiter ||= RateLimiter.new(
+      redis: REDIS_FOR_RATE_LIMITING,
+      key: "rate:airtable:global",
+      limit: 50,
+      period: 1.0
+    )
+  end
 
   class RateLimitError < StandardError
     def initialize(response_body)
@@ -26,16 +40,66 @@ class AirtableService
       make_request(:post, url, body: body)
     end
 
+    def patch(url, body)
+      make_request(:patch, url, body: body)
+    end
+
     def delete(url)
       make_request(:delete, url)
     end
 
     private
 
+    # Extract base_id from Airtable API URL
+    # Supports patterns like:
+    # - /v0/{base_id}/{table_id}
+    # - /v0/meta/bases/{base_id}/tables
+    # - /v0/bases/{base_id}/webhooks/...
+    def extract_base_id(url)
+      # Remove the API URL prefix if present
+      path = url.sub(%r{^https?://[^/]+}, "")
+      
+      # Pattern 1: /v0/meta/bases/{base_id}/... (check this first to avoid matching "meta" as base_id)
+      match = path.match(%r{^/v0/meta/bases/([^/]+)})
+      return match[1] if match
+      
+      # Pattern 2: /v0/bases/{base_id}/... (check before generic pattern)
+      match = path.match(%r{^/v0/bases/([^/]+)})
+      return match[1] if match
+      
+      # Pattern 3: /v0/{base_id}/{table_id} (records endpoint - must not be "meta" or "bases")
+      match = path.match(%r{^/v0/([^/]+)/[^/]+(?:\?|$)})
+      if match && match[1] != "meta" && match[1] != "bases"
+        return match[1]
+      end
+      
+      nil
+    end
+
+    # Get or create a per-base rate limiter
+    # Limit: 1 request per second per base
+    def rate_limiter_for_base(base_id)
+      @base_limiters ||= {}
+      @base_limiters[base_id] ||= RateLimiter.new(
+        redis: REDIS_FOR_RATE_LIMITING,
+        key: "rate:airtable:base:#{base_id}",
+        limit: 1,
+        period: 1.0
+      )
+    end
+
     def make_request(method, url, body: nil)
+      # Apply global rate limiting first (50 req/sec)
+      global_rate_limiter.acquire!
+
+      # Apply per-base rate limiting if base_id can be extracted (1 req/sec per base)
+      base_id = extract_base_id(url)
+      if base_id
+        rate_limiter_for_base(base_id).acquire!
+      end
       client = HTTPX.with(
         headers: {
-          "Authorization" => "Bearer #{API_TOKEN}",
+          "Authorization" => "Bearer #{api_token}",
           "Content-Type" => "application/json"
         }
       )
@@ -58,8 +122,17 @@ class AirtableService
         raise "Airtable API error: #{response.error.message}"
       end
 
-      unless response.status == 200
-        raise "Airtable API error: #{response.status} - #{response.body.to_s}"
+      # PATCH requests can return 200 (OK) for successful updates
+      unless [200, 201].include?(response.status)
+        error_body = response.body.to_s
+        # Try to parse JSON error if available
+        begin
+          error_json = response.json rescue nil
+          error_msg = error_json ? error_json.inspect : error_body
+        rescue
+          error_msg = error_body
+        end
+        raise "Airtable API error: #{response.status} - #{error_msg}"
       end
 
       return nil if response.body.to_s.empty?
@@ -83,9 +156,14 @@ class AirtableService
       end
     end
 
+    def self.find_by_id(base_id:)
+      find_each do |base|
+        return base if base["id"] == base_id
+      end
+      nil
+    end
+
     def self.get_schema(base_id:, include_visible_field_ids: false)
-      RateLimiterService::Airtable(base_id).wait_turn
-      
       url = "#{META_API_URL}/bases/#{base_id}/tables"
       url += "?include[]=visibleFieldIds" if include_visible_field_ids
       
@@ -100,34 +178,26 @@ class AirtableService
       tables_by_id
     end
 
-    def self.get_cached_schema(base_id:, include_visible_field_ids: false, expires_in: 5.minutes)
-      cache_key = "airtable/schema/#{base_id}/#{include_visible_field_ids}"
-      
-      Rails.cache.fetch(cache_key, expires_in: expires_in) do
-        get_schema(
-          base_id: base_id,
-          include_visible_field_ids: include_visible_field_ids
-        )
-      end
+    def self.update_table_schema(base_id:, table_id:, fields:)
+      # Use Metadata API endpoint to update table schema
+      # According to Airtable API docs, fields can be added via PATCH to /v0/meta/bases/{baseId}/tables/{tableId}
+      # or POST to /v0/meta/bases/{baseId}/tables/{tableId}/fields
+      # Try PATCH first as it's the standard approach for updates
+      url = "#{META_API_URL}/bases/#{base_id}/tables/#{table_id}"
+      # Ensure body is properly formatted with string keys
+      body = { "fields" => fields }
+      AirtableService.patch(url, body)
     end
 
-    def self.find_cached(base_id)
-      Rails.cache.fetch("airtable/bases", expires_in: 1.hour) do
-        # Collect all bases into an array
-        bases = []
-        find_each { |base| bases << base }
-        bases
-      end.find { |base| base["id"] == base_id }
-    end
-
-    def self.clear_schema_cache(base_id, include_visible_field_ids: false)
-      Rails.cache.delete("airtable/schema/#{base_id}/#{include_visible_field_ids}")
+    def self.add_field(base_id:, table_id:, field:)
+      # Alternative: POST to /fields endpoint to add a single field
+      url = "#{META_API_URL}/bases/#{base_id}/tables/#{table_id}/fields"
+      AirtableService.post(url, field)
     end
 
     private
 
     def self.fetch_bases(offset = nil)
-      # Note: No rate limiting here as this is a global API call, not base-specific
       url = "#{META_API_URL}/bases"
       url += "?offset=#{offset}" if offset
       AirtableService.get(url)
@@ -135,21 +205,35 @@ class AirtableService
   end
 
   class Records
-    def self.list(base_id:, table_id:, offset: nil)
-      RateLimiterService::Airtable(base_id).wait_turn
-      
+    def self.list(base_id:, table_id:, offset: nil, max_records: nil, filter_formula: nil, sort: nil)
       url = "#{API_URL}/#{base_id}/#{table_id}"
-      url += "?offset=#{offset}" if offset
+      params = []
+      params << "offset=#{offset}" if offset
+      params << "maxRecords=#{max_records}" if max_records
+      if filter_formula
+        # URL encode the filter formula
+        params << "filterByFormula=#{CGI.escape(filter_formula)}"
+      end
+      if sort
+        # sort is an array of hashes: [{field: "Created Time", direction: "desc"}, ...]
+        sort.each_with_index do |sort_item, index|
+          field = sort_item[:field] || sort_item["field"]
+          direction = sort_item[:direction] || sort_item["direction"] || "asc"
+          params << "sort[#{index}][field]=#{CGI.escape(field.to_s)}"
+          params << "sort[#{index}][direction]=#{CGI.escape(direction.to_s)}"
+        end
+      end
+      url += "?#{params.join('&')}" if params.any?
       
       AirtableService.get(url)
     end
 
-    def self.find_each(base_id:, table_id:, &block)
-      return enum_for(:find_each, base_id: base_id, table_id: table_id) unless block_given?
+    def self.find_each(base_id:, table_id:, filter_formula: nil, &block)
+      return enum_for(:find_each, base_id: base_id, table_id: table_id, filter_formula: filter_formula) unless block_given?
 
       offset = nil
       loop do
-        response = list(base_id: base_id, table_id: table_id, offset: offset)
+        response = list(base_id: base_id, table_id: table_id, offset: offset, filter_formula: filter_formula)
         records = response["records"]
         
         records.each(&block)
@@ -162,8 +246,6 @@ class AirtableService
 
   class Webhooks
     def self.create(base_id:, notification_url: nil, specification:)
-      RateLimiterService::Airtable(base_id).wait_turn
-      
       url = "#{API_URL}/bases/#{base_id}/webhooks"
       
       body = {
@@ -175,22 +257,16 @@ class AirtableService
     end
 
     def self.delete(base_id:, webhook_id:)
-      RateLimiterService::Airtable(base_id).wait_turn
-      
       url = "#{API_URL}/bases/#{base_id}/webhooks/#{webhook_id}"
       AirtableService.delete(url)
     end
 
     def self.refresh(base_id:, webhook_id:)
-      RateLimiterService::Airtable(base_id).wait_turn
-      
       url = "#{API_URL}/bases/#{base_id}/webhooks/#{webhook_id}/refresh"
       AirtableService.post(url, nil)
     end
 
     def self.payloads(base_id:, webhook_id:, start_cursor: nil)
-      RateLimiterService::Airtable(base_id).wait_turn
-      
       url = "#{API_URL}/bases/#{base_id}/webhooks/#{webhook_id}/payloads"
       url += "?cursor=#{start_cursor}" if start_cursor
       
@@ -198,3 +274,4 @@ class AirtableService
     end
   end
 end
+

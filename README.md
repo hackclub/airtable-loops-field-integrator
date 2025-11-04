@@ -1,24 +1,24 @@
-Purpose of this Rails app is to create an easy integration from Hack Club Airtable bases into Loops.so, our email list system.
+# README
 
-The usage should be as follows:
+This README would normally document whatever steps are necessary to get the
+application up and running.
 
-1. In any Hack Club Airtable, create a new field called "Loops - juiceSignUpAt"
-2. This Rails app should automatically detect that this field has been updated, and set the juiceSignUpAt field in Loops.so to the value of the "Loops - juiceSignUpAt" field in Airtable.
-3. If there is an error - a field in Airtable called "Loops (Error) - juiceSignUpAt" will be set to the error message.
+Things you may want to cover:
 
-## Setup
+* Ruby version
 
-Set `WEBHOOK_BASE_URL` to the base URL (no slash) of this Rails app.
+* System dependencies
 
-Example: `WEBHOOK_BASE_URL=https://airtable-loops-integrator.hackclub.com`
+* Configuration
 
-## To Do
+* Database creation
 
-- [ ] Write to Airtable on field change
-- [x] Concurrency controls
-- [ ] Graceful error handling that displays to user
-- [ ] Descriptive README
+* Database initialization
 
-Feature ideas:
+* How to run the test suite
 
-- [ ] Add "special" fields that can be set like `Loops - Special - setFirstAndLastName` and `Loops - Special - setAddress` that would have an AI parsing step to break the provided info into parts.
+* Services (job queues, cache servers, search engines, etc.)
+
+* Deployment instructions
+
+* ...

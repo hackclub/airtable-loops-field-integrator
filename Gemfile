@@ -1,7 +1,7 @@
 source "https://rubygems.org"
 
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
-gem "rails", "~> 8.0.1"
+gem "rails", "~> 8.0.4"
 # The modern asset pipeline for Rails [https://github.com/rails/propshaft]
 gem "propshaft"
 # Use postgresql as the database for Active Record
@@ -14,12 +14,8 @@ gem "importmap-rails"
 gem "turbo-rails"
 # Hotwire's modest JavaScript framework [https://stimulus.hotwired.dev]
 gem "stimulus-rails"
-
-# HTTP client with support for HTTP/2 and persistent connections
-gem "httpx", "~> 1.2"
-
-gem "email_validator"
-gem "loops_sdk"
+# Build JSON APIs with ease [https://github.com/rails/jbuilder]
+gem "jbuilder"
 
 # Use Active Model has_secure_password [https://guides.rubyonrails.org/active_model_basics.html#securepassword]
 # gem "bcrypt", "~> 3.1.7"
@@ -27,9 +23,15 @@ gem "loops_sdk"
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem "tzinfo-data", platforms: %i[ windows jruby ]
 
-gem "solid_cache"
-gem "good_job"
-gem "solid_cable"
+# Use Redis for Rails.cache, Active Job, and Action Cable
+gem "redis", "~> 5.0"
+
+# Use Sidekiq for background jobs
+gem "sidekiq", "~> 7.3"
+gem "sidekiq-scheduler" # seconds-level schedules like every 15s
+
+# HTTP client for API requests
+gem "httpx", "~> 1.0"
 
 # Reduces boot times through caching; required in config/boot.rb
 gem "bootsnap", require: false
@@ -59,3 +61,8 @@ group :development do
   gem "web-console"
 end
 
+group :test do
+  # Use system testing [https://guides.rubyonrails.org/testing.html#system-testing]
+  gem "capybara"
+  gem "selenium-webdriver"
+end

@@ -1,0 +1,34 @@
+---
+concurrency: 5
+queues:
+  - scheduler
+  - polling
+  - default
+
+:schedule:
+  sync_source_enqueuer:
+    every: ["15s"]
+    class: "SyncSourceEnqueuerWorker"
+    queue: scheduler
+  loops_dispatch:
+    every: ["10s"]
+    class: "LoopsDispatchWorker"
+    queue: default
+  prune_loops_field_baselines:
+    every: ["1d"]
+    class: "PruneLoopsFieldBaselinesWorker"
+    queue: default
+  prune_loops_outbox:
+    every: ["1d"]
+    class: "PruneLoopsOutboxWorker"
+    queue: default
+
+production:
+  concurrency: 10
+
+staging:
+  concurrency: 5
+
+development:
+  concurrency: 5
+

@@ -10,118 +10,103 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_02_18_022030) do
+ActiveRecord::Schema[8.0].define(version: 2025_11_03_191033) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
-  create_table "good_job_batches", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  # Custom types defined in this database.
+  # Note that some types may not work with other database engines. Be careful if changing database.
+  create_enum "loops_outbox_envelope_status", ["queued", "sent", "ignored_noop", "failed", "partially_sent"]
+
+  create_table "field_value_baselines", force: :cascade do |t|
+    t.bigint "sync_source_id", null: false
+    t.string "row_id", null: false
+    t.string "field_id", null: false
+    t.jsonb "last_known_value"
+    t.datetime "value_last_updated_at", null: false
+    t.datetime "last_checked_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
+    t.datetime "first_seen_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
+    t.integer "checked_count", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.text "description"
-    t.jsonb "serialized_properties"
-    t.text "on_finish"
-    t.text "on_success"
-    t.text "on_discard"
-    t.text "callback_queue_name"
-    t.integer "callback_priority"
-    t.datetime "enqueued_at"
-    t.datetime "discarded_at"
-    t.datetime "finished_at"
-    t.datetime "jobs_finished_at"
+    t.index ["last_checked_at"], name: "idx_field_value_baselines_last_checked_at"
+    t.index ["sync_source_id", "row_id", "field_id"], name: "index_field_value_baselines_on_sync_source_row_field", unique: true
+    t.index ["sync_source_id"], name: "index_field_value_baselines_on_sync_source_id"
+    t.index ["value_last_updated_at"], name: "index_field_value_baselines_on_value_last_updated_at"
   end
 
-  create_table "good_job_executions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "loops_contact_change_audits", force: :cascade do |t|
+    t.datetime "occurred_at", null: false
+    t.string "email_normalized", null: false
+    t.string "field_name", null: false
+    t.jsonb "former_loops_value"
+    t.jsonb "new_loops_value"
+    t.jsonb "former_sync_source_value"
+    t.jsonb "new_sync_source_value"
+    t.string "strategy"
+    t.bigint "sync_source_id", null: false
+    t.string "sync_source_table_id"
+    t.string "sync_source_record_id"
+    t.string "sync_source_field_id"
+    t.string "request_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.uuid "active_job_id", null: false
-    t.text "job_class"
-    t.text "queue_name"
-    t.jsonb "serialized_params"
-    t.datetime "scheduled_at"
-    t.datetime "finished_at"
-    t.text "error"
-    t.integer "error_event", limit: 2
-    t.text "error_backtrace", array: true
-    t.uuid "process_id"
-    t.interval "duration"
-    t.index ["active_job_id", "created_at"], name: "index_good_job_executions_on_active_job_id_and_created_at"
-    t.index ["process_id", "created_at"], name: "index_good_job_executions_on_process_id_and_created_at"
+    t.jsonb "provenance", default: {}
+    t.index ["email_normalized", "occurred_at"], name: "idx_on_email_normalized_occurred_at_4255605731"
+    t.index ["email_normalized"], name: "index_loops_contact_change_audits_on_email_normalized"
+    t.index ["occurred_at"], name: "index_loops_contact_change_audits_on_occurred_at"
+    t.index ["provenance"], name: "index_loops_contact_change_audits_on_provenance", using: :gin
+    t.index ["sync_source_id"], name: "index_loops_contact_change_audits_on_sync_source_id"
   end
 
-  create_table "good_job_processes", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "loops_field_baselines", force: :cascade do |t|
+    t.string "email_normalized", null: false
+    t.string "field_name", null: false
+    t.jsonb "last_sent_value"
+    t.datetime "last_sent_at"
+    t.datetime "expires_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.jsonb "state"
-    t.integer "lock_type", limit: 2
+    t.index ["email_normalized", "field_name"], name: "index_loops_field_baselines_on_email_normalized_and_field_name", unique: true
+    t.index ["expires_at"], name: "index_loops_field_baselines_on_expires_at"
   end
 
-  create_table "good_job_settings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+  create_table "loops_outbox_envelopes", force: :cascade do |t|
+    t.string "email_normalized", null: false
+    t.jsonb "payload", null: false
+    t.jsonb "provenance", default: {}, null: false
+    t.jsonb "error", default: {}
+    t.bigint "sync_source_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.text "key"
-    t.jsonb "value"
-    t.index ["key"], name: "index_good_job_settings_on_key", unique: true
+    t.enum "status", default: "queued", null: false, enum_type: "loops_outbox_envelope_status"
+    t.index ["created_at"], name: "index_loops_outbox_envelopes_on_created_at"
+    t.index ["email_normalized", "status"], name: "index_loops_outbox_envelopes_on_email_normalized_and_status"
+    t.index ["status"], name: "index_loops_outbox_envelopes_on_status"
+    t.index ["sync_source_id"], name: "index_loops_outbox_envelopes_on_sync_source_id"
   end
 
-  create_table "good_jobs", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.text "queue_name"
-    t.integer "priority"
-    t.jsonb "serialized_params"
-    t.datetime "scheduled_at"
-    t.datetime "performed_at"
-    t.datetime "finished_at"
-    t.text "error"
+  create_table "sync_sources", force: :cascade do |t|
+    t.string "source", null: false
+    t.string "source_id", null: false
+    t.jsonb "cursor"
+    t.integer "poll_interval_seconds", default: 30, null: false
+    t.float "poll_jitter", default: 0.1, null: false
+    t.datetime "next_poll_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
+    t.datetime "last_poll_attempted_at"
+    t.datetime "last_successful_poll_at"
+    t.integer "consecutive_failures", default: 0, null: false
+    t.jsonb "error_details", default: {}, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.uuid "active_job_id"
-    t.text "concurrency_key"
-    t.text "cron_key"
-    t.uuid "retried_good_job_id"
-    t.datetime "cron_at"
-    t.uuid "batch_id"
-    t.uuid "batch_callback_id"
-    t.boolean "is_discrete"
-    t.integer "executions_count"
-    t.text "job_class"
-    t.integer "error_event", limit: 2
-    t.text "labels", array: true
-    t.uuid "locked_by_id"
-    t.datetime "locked_at"
-    t.index ["active_job_id", "created_at"], name: "index_good_jobs_on_active_job_id_and_created_at"
-    t.index ["batch_callback_id"], name: "index_good_jobs_on_batch_callback_id", where: "(batch_callback_id IS NOT NULL)"
-    t.index ["batch_id"], name: "index_good_jobs_on_batch_id", where: "(batch_id IS NOT NULL)"
-    t.index ["concurrency_key"], name: "index_good_jobs_on_concurrency_key_when_unfinished", where: "(finished_at IS NULL)"
-    t.index ["cron_key", "created_at"], name: "index_good_jobs_on_cron_key_and_created_at_cond", where: "(cron_key IS NOT NULL)"
-    t.index ["cron_key", "cron_at"], name: "index_good_jobs_on_cron_key_and_cron_at_cond", unique: true, where: "(cron_key IS NOT NULL)"
-    t.index ["finished_at"], name: "index_good_jobs_jobs_on_finished_at", where: "((retried_good_job_id IS NULL) AND (finished_at IS NOT NULL))"
-    t.index ["labels"], name: "index_good_jobs_on_labels", where: "(labels IS NOT NULL)", using: :gin
-    t.index ["locked_by_id"], name: "index_good_jobs_on_locked_by_id", where: "(locked_by_id IS NOT NULL)"
-    t.index ["priority", "created_at"], name: "index_good_job_jobs_for_candidate_lookup", where: "(finished_at IS NULL)"
-    t.index ["priority", "created_at"], name: "index_good_jobs_jobs_on_priority_created_at_when_unfinished", order: { priority: "DESC NULLS LAST" }, where: "(finished_at IS NULL)"
-    t.index ["priority", "scheduled_at"], name: "index_good_jobs_on_priority_scheduled_at_unfinished_unlocked", where: "((finished_at IS NULL) AND (locked_by_id IS NULL))"
-    t.index ["queue_name", "scheduled_at"], name: "index_good_jobs_on_queue_name_and_scheduled_at", where: "(finished_at IS NULL)"
-    t.index ["scheduled_at"], name: "index_good_jobs_on_scheduled_at", where: "(finished_at IS NULL)"
+    t.jsonb "metadata", default: {}, null: false
+    t.string "display_name"
+    t.datetime "display_name_updated_at"
+    t.index ["next_poll_at"], name: "index_sync_sources_on_next_poll_at"
+    t.index ["source", "source_id"], name: "index_sync_sources_on_source_and_source_id", unique: true
   end
 
-  create_table "payloads", force: :cascade do |t|
-    t.string "base_id"
-    t.string "webhook_id", null: false
-    t.json "body"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["webhook_id"], name: "index_payloads_on_webhook_id"
-  end
-
-  create_table "webhooks", id: :string, force: :cascade do |t|
-    t.string "base_id"
-    t.string "notification_url"
-    t.json "specification"
-    t.string "mac_secret_base64"
-    t.datetime "expiration_time"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.integer "last_cursor"
-  end
-
-  add_foreign_key "payloads", "webhooks"
+  add_foreign_key "field_value_baselines", "sync_sources"
+  add_foreign_key "loops_contact_change_audits", "sync_sources"
+  add_foreign_key "loops_outbox_envelopes", "sync_sources"
 end

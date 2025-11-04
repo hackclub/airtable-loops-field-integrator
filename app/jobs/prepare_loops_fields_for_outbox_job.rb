@@ -1,0 +1,165 @@
+require_relative "../lib/email_normalizer"
+
+class PrepareLoopsFieldsForOutboxJob
+  include Sidekiq::Worker
+
+  sidekiq_options queue: :default
+
+  # OUTPUT ENVELOPE FORMAT
+  # ======================
+  #
+  # The output envelope is a Hash where:
+  # - Keys are Loops field names (strings)
+  # - Values are field metadata hashes with the following structure:
+  #
+  #   {
+  #     "loops_field_name" => {
+  #       value: <any>,           # The actual value to send to Loops (required)
+  #       strategy: :upsert,      # Field update strategy: :upsert or :override (required)
+  #       modified_at: "2025-11-02T21:00:00Z"  # ISO8601 timestamp (required)
+  #     }
+  #   }
+  #
+  # Example:
+  #   {
+  #     "tmpZachLoopsApiTest" => {
+  #       value: "hi",
+  #       strategy: :upsert,
+  #       modified_at: "2025-11-02T21:00:00Z"
+  #     }
+  #   }
+  #
+  # Strategy meanings:
+  # - :upsert: Only update if value is not nil (skip nil values)
+  # - :override: Always update, even if value is nil
+  #
+  # Field name mapping:
+  # - Sync source field names are mapped to Loops field names by stripping prefixes:
+  #   - "Loops - tmpZachLoopsApiTest" → "tmpZachLoopsApiTest" (strategy: :upsert)
+  #   - "Loops - Override - tmpZachLoopsApiTest2" → "tmpZachLoopsApiTest2" (strategy: :override)
+  # - Strategy is determined by the presence of "Override" in the field name
+
+  def perform(email, sync_source_id, table_id, record_id, changed_fields)
+    # Process all Loops fields from changed_fields
+    # changed_fields format:
+    # {
+    #   "field_id/field_name" => {
+    #     "value" => <current_value>,
+    #     "old_value" => <previous_value> or nil,
+    #     "modified_at" => "ISO8601 timestamp"
+    #   }
+    # }
+    
+    # Normalize email
+    email_normalized = EmailNormalizer.normalize(email)
+    return unless email_normalized
+
+    # Build envelope by processing all Loops fields from changed_fields
+    envelope = {}
+    provenance_fields = []
+
+    changed_fields.each do |field_key, field_data|
+      # Extract field name from key (format: "field_id/field_name")
+      field_name = field_key.split("/", 2).last
+      
+      # Skip if not a Loops field (must start with "Loops - " or "Loops - Override - ")
+      next unless field_name =~ /\ALoops\s*-\s*/i
+      
+      # Extract field name without prefix to check if it's lowerCamelCase
+      field_name_without_prefix = field_name.sub(/\ALoops\s*-\s*(Override\s*-\s*)?/i, "")
+      
+      # Skip if field name doesn't start with lowercase (not lowerCamelCase)
+      # This prevents matching fields like "Loops - Lists" which starts with uppercase
+      next unless field_name_without_prefix =~ /\A[a-z]/
+      
+      # Extract field_id from key
+      field_id = field_key.split("/", 2).first
+      
+      # Map field name and determine strategy
+      loops_field_name, strategy = map_field_name_and_strategy(field_name)
+      
+      # Extract values
+      value = field_data["value"]
+      old_value = field_data["old_value"]
+      modified_at = field_data["modified_at"] || Time.current.iso8601
+      
+      # Add to envelope
+      envelope[loops_field_name] = {
+        value: value,
+        strategy: strategy,
+        modified_at: modified_at
+      }
+      
+      # Add to provenance fields
+      provenance_fields << {
+        sync_source_field_id: field_id,
+        sync_source_field_name: field_name,
+        former_sync_source_value: old_value,
+        new_sync_source_value: value,
+        modified_at: modified_at
+      }
+    end
+
+    # Skip if no Loops fields found
+    return if envelope.empty?
+
+    # Build provenance
+    provenance = build_provenance(sync_source_id, table_id, record_id, provenance_fields)
+
+    # Write to outbox
+    LoopsOutboxEnvelope.create!(
+      email_normalized: email_normalized,
+      payload: envelope,
+      status: :queued,
+      provenance: provenance,
+      sync_source_id: sync_source_id
+    )
+  end
+
+  private
+
+  # Map sync source field name to Loops field name and determine strategy
+  # Examples:
+  #   "Loops - tmpZachLoopsApiTest" → ["tmpZachLoopsApiTest", :upsert]
+  #   "Loops - Override - tmpZachLoopsApiTest2" → ["tmpZachLoopsApiTest2", :override]
+  def map_field_name_and_strategy(field_name)
+    # Check if field name contains "Override"
+    has_override = field_name =~ /\ALoops\s*-\s*Override\s*-\s*/i
+    
+    if has_override
+      # Strip "Loops - Override - " prefix
+      loops_field_name = field_name.sub(/\ALoops\s*-\s*Override\s*-\s*/i, "")
+      strategy = :override
+    else
+      # Strip "Loops - " prefix
+      loops_field_name = field_name.sub(/\ALoops\s*-\s*/i, "")
+      strategy = :upsert
+    end
+    
+    [loops_field_name, strategy]
+  end
+
+  # Build provenance metadata
+  def build_provenance(sync_source_id, table_id, record_id, fields_array)
+    sync_source = SyncSource.find_by(id: sync_source_id)
+    sync_source_type = sync_source&.source || "unknown"
+    
+    provenance = {
+      sync_source_id: sync_source_id,
+      sync_source_type: sync_source_type,
+      sync_source_table_id: table_id,
+      sync_source_record_id: record_id,
+      fields: fields_array,
+      created_from: "#{sync_source_type}_poller"
+    }
+    
+    if sync_source
+      provenance[:sync_source_metadata] = {
+        source_id: sync_source.source_id
+      }.merge(sync_source.metadata || {})
+    end
+    
+    provenance
+  end
+end
+

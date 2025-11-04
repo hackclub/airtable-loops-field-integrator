@@ -1,0 +1,223 @@
+<% content_for :title, "Audit Log for #{@email}" %>
+
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 10px;
+    line-height: 1.3;
+    font-size: 13px;
+  }
+  h1 {
+    color: #333;
+    margin-bottom: 5px;
+    margin-top: 0;
+    font-size: 18px;
+  }
+  h2 {
+    color: #333;
+    margin-top: 15px;
+    margin-bottom: 8px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #ddd;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  h3 {
+    color: #555;
+    margin-top: 12px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .email {
+    color: #666;
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+  .nav {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #ddd;
+  }
+  .nav a {
+    color: #007bff;
+    text-decoration: none;
+    margin-right: 20px;
+    font-weight: 500;
+    font-size: 12px;
+  }
+  .nav a:hover {
+    text-decoration: underline;
+  }
+  .nav a.active {
+    color: #333;
+    font-weight: 600;
+  }
+  .back-link {
+    display: inline-block;
+    margin-bottom: 8px;
+    color: #007bff;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 12px;
+  }
+  .back-link:hover {
+    text-decoration: underline;
+  }
+  .time-bucket {
+    margin-bottom: 8px;
+  }
+  .audit-entry {
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 2px;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+  }
+  .field-name {
+    font-weight: 600;
+    color: #333;
+    min-width: 150px;
+    flex-shrink: 0;
+  }
+  .old-value {
+    color: #dc3545;
+    text-decoration: line-through;
+    font-family: monospace;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .arrow {
+    color: #999;
+    flex-shrink: 0;
+  }
+  .new-value {
+    color: #28a745;
+    font-weight: 500;
+    font-family: monospace;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .null-value {
+    color: #999;
+    font-style: italic;
+    font-family: monospace;
+  }
+  .source-link {
+    color: #007bff;
+    text-decoration: none;
+    font-size: 10px;
+    margin-left: 8px;
+    flex-shrink: 0;
+  }
+  .source-link:hover {
+    text-decoration: underline;
+  }
+  .timezone-info {
+    font-size: 10px;
+    color: #999;
+    font-style: italic;
+  }
+  pre {
+    background-color: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 2px;
+    padding: 8px;
+    overflow-x: auto;
+    font-size: 10px;
+    line-height: 1.3;
+    margin: 0;
+  }
+  .empty {
+    color: #666;
+    font-style: italic;
+  }
+</style>
+
+<script>
+  // Convert UTC timestamps to user's timezone
+  document.addEventListener('DOMContentLoaded', function() {
+    const timeElements = document.querySelectorAll('[data-utc-time]');
+    timeElements.forEach(function(el) {
+      const utcTime = el.getAttribute('data-utc-time');
+      const utcDate = new Date(utcTime);
+      const localTime = utcDate.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+        timeZoneName: 'short'
+      });
+      el.textContent = localTime;
+    });
+  });
+</script>
+
+<div class="nav">
+  <%= link_to "Email Audit Logs", emails_path, class: (request.path == emails_path ? "active" : "") %>
+  <%= link_to "Sync Sources", sync_sources_path, class: (request.path.start_with?("/sync_sources") ? "active" : "") %>
+</div>
+
+<%= link_to "← Back", emails_path, class: "back-link" %>
+
+<h1>Audit Log</h1>
+<div class="email"><%= @email %></div>
+
+<% if @bucketed_audits&.any? %>
+  <h2>Changes</h2>
+  <div class="timezone-info">Times shown in your local timezone</div>
+  
+  <% @bucketed_audits.sort_by { |time, _| -time.to_i }.each do |bucket_time, audits| %>
+    <div class="time-bucket">
+      <h3><span data-utc-time="<%= bucket_time.iso8601 %>"><%= bucket_time.strftime("%b %d, %Y %I:%M %p UTC") %></span></h3>
+      <% audits.sort_by { |a| -a.occurred_at.to_i }.each do |audit| %>
+        <div class="audit-entry">
+          <span class="field-name"><%= audit.field_name %></span>
+          <% if audit.former_loops_value %>
+            <span class="old-value"><%= audit.former_loops_value.is_a?(Hash) || audit.former_loops_value.is_a?(Array) ? JSON.pretty_generate(audit.former_loops_value) : audit.former_loops_value.to_s %></span>
+          <% else %>
+            <span class="null-value">null</span>
+          <% end %>
+          <span class="arrow">→</span>
+          <% if audit.new_loops_value %>
+            <span class="new-value"><%= audit.new_loops_value.is_a?(Hash) || audit.new_loops_value.is_a?(Array) ? JSON.pretty_generate(audit.new_loops_value) : audit.new_loops_value.to_s %></span>
+          <% else %>
+            <span class="null-value">null</span>
+          <% end %>
+          <% if audit.sync_source_table_id && audit.sync_source_record_id %>
+            <% 
+              base_id = audit.provenance&.dig("sync_source_metadata", "source_id") || 
+                        audit.sync_source&.source_id
+              if base_id
+                airtable_url = "https://airtable.com/#{base_id}/#{audit.sync_source_table_id}/#{audit.sync_source_record_id}"
+              end
+            %>
+            <% if airtable_url %>
+              <a href="<%= airtable_url %>" target="_blank" class="source-link" title="View source record in Airtable">🔗</a>
+            <% end %>
+          <% end %>
+        </div>
+      <% end %>
+    </div>
+  <% end %>
+  
+  <h2>Raw JSON</h2>
+  <pre><%= JSON.pretty_generate(@bucketed_audits.values.flatten.map(&:as_json)) %></pre>
+<% else %>
+  <p class="empty">No audit logs found for this email.</p>
+<% end %>
+
