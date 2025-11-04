@@ -6,6 +6,18 @@ class SyncSourcesController < ApplicationController
     begin
       @bases = AirtableService::Bases.find_each.to_a
       @sync_sources_by_base_id = SyncSource.where(source: 'airtable').index_by(&:source_id)
+      
+      # Sort bases to show active sync sources on top
+      @bases.sort_by! do |base|
+        sync_source = @sync_sources_by_base_id[base["id"]]
+        if sync_source
+          # Active sync sources (consecutive_failures == 0) come first
+          sync_source.consecutive_failures == 0 ? 0 : 1
+        else
+          # Bases with no sync source come last
+          2
+        end
+      end
     rescue => e
       @error = "Failed to fetch Airtable bases: #{e.message}"
       @bases = []
