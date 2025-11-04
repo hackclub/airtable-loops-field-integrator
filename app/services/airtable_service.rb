@@ -58,21 +58,21 @@ class AirtableService
     def extract_base_id(url)
       # Remove the API URL prefix if present
       path = url.sub(%r{^https?://[^/]+}, "")
-      
+
       # Pattern 1: /v0/meta/bases/{base_id}/... (check this first to avoid matching "meta" as base_id)
       match = path.match(%r{^/v0/meta/bases/([^/]+)})
       return match[1] if match
-      
+
       # Pattern 2: /v0/bases/{base_id}/... (check before generic pattern)
       match = path.match(%r{^/v0/bases/([^/]+)})
       return match[1] if match
-      
+
       # Pattern 3: /v0/{base_id}/{table_id} (records endpoint - must not be "meta" or "bases")
       match = path.match(%r{^/v0/([^/]+)/[^/]+(?:\?|$)})
       if match && match[1] != "meta" && match[1] != "bases"
         return match[1]
       end
-      
+
       nil
     end
 
@@ -123,7 +123,7 @@ class AirtableService
       end
 
       # PATCH requests can return 200 (OK) for successful updates
-      unless [200, 201].include?(response.status)
+      unless [ 200, 201 ].include?(response.status)
         error_body = response.body.to_s
         # Try to parse JSON error if available
         begin
@@ -148,9 +148,9 @@ class AirtableService
       loop do
         response = fetch_bases(offset)
         bases = response["bases"]
-        
+
         bases.each(&block)
-        
+
         offset = response["offset"]
         break unless offset
       end
@@ -166,15 +166,15 @@ class AirtableService
     def self.get_schema(base_id:, include_visible_field_ids: false)
       url = "#{META_API_URL}/bases/#{base_id}/tables"
       url += "?include[]=visibleFieldIds" if include_visible_field_ids
-      
+
       response = AirtableService.get(url)
-      
+
       # Index tables by ID for easier lookup
       tables_by_id = {}
       response["tables"].each do |table|
         tables_by_id[table["id"]] = table
       end
-      
+
       tables_by_id
     end
 
@@ -224,7 +224,7 @@ class AirtableService
         end
       end
       url += "?#{params.join('&')}" if params.any?
-      
+
       AirtableService.get(url)
     end
 
@@ -235,9 +235,9 @@ class AirtableService
       loop do
         response = list(base_id: base_id, table_id: table_id, offset: offset, filter_formula: filter_formula)
         records = response["records"]
-        
+
         records.each(&block)
-        
+
         offset = response["offset"]
         break unless offset
       end
@@ -247,7 +247,7 @@ class AirtableService
   class Webhooks
     def self.create(base_id:, notification_url: nil, specification:)
       url = "#{API_URL}/bases/#{base_id}/webhooks"
-      
+
       body = {
         specification: specification
       }
@@ -269,9 +269,8 @@ class AirtableService
     def self.payloads(base_id:, webhook_id:, start_cursor: nil)
       url = "#{API_URL}/bases/#{base_id}/webhooks/#{webhook_id}/payloads"
       url += "?cursor=#{start_cursor}" if start_cursor
-      
+
       AirtableService.get(url)
     end
   end
 end
-

@@ -8,4 +8,3 @@ module EmailNormalizer
     normalized.empty? ? nil : normalized
   end
 end
-

@@ -37,5 +37,3 @@ class SyncSource < ApplicationRecord
       source_id
   end
 end
-
-

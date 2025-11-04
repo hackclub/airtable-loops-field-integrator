@@ -6,7 +6,7 @@ if ENV["DATABASE_URL"] && !ENV["DATABASE_URL"].include?("_test") && !ENV["TEST_D
   # Extract connection details from existing DATABASE_URL
   # Format: postgresql://user:pass@host:port/dbname
   db_url = ENV["DATABASE_URL"]
-  
+
   # Parse the URL to extract components
   if db_url.match(%r{postgresql?://([^:]+):([^@]+)@([^:/]+):?(\d+)?/(.+)})
     db_user = $1
@@ -14,7 +14,7 @@ if ENV["DATABASE_URL"] && !ENV["DATABASE_URL"].include?("_test") && !ENV["TEST_D
     db_host = $3
     db_port = $4 || "5432"
     db_name = $5
-    
+
     # Replace database name with test database name
     test_db_name = ENV.fetch("TEST_DB_NAME", "app_test")
     ENV["DATABASE_URL"] = "postgresql://#{db_user}:#{db_pass}@#{db_host}:#{db_port}/#{test_db_name}"
@@ -36,7 +36,7 @@ require_relative "../config/environment"
 begin
   # Get database config
   db_config = ActiveRecord::Base.configurations.configs_for(env_name: "test").first
-  
+
   # Try to establish connection - will fail if database doesn't exist
   ActiveRecord::Base.establish_connection(db_config.configuration_hash)
   ActiveRecord::Base.connection.execute("SELECT 1")
@@ -65,7 +65,7 @@ rescue ActiveRecord::NoDatabaseError, PG::ConnectionBad => e
       puts "Warning: Could not auto-create test database: #{pg_error.message}"
     end
   end
-  
+
   # Reconnect to the newly created database
   ActiveRecord::Base.establish_connection(db_config.configuration_hash)
 rescue => e

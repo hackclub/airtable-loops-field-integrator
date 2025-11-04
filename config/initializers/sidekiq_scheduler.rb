@@ -1,6 +1,6 @@
 if ENV["SIDEKIQ_SCHEDULER"] == "1"
   require "sidekiq-scheduler"
-  
+
   Sidekiq.configure_server do |config|
     # Load schedule from config/sidekiq.yml
     config.on(:startup) do
@@ -9,5 +9,3 @@ if ENV["SIDEKIQ_SCHEDULER"] == "1"
     end
   end
 end
-
-

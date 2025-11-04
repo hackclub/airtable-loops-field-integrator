@@ -105,5 +105,3 @@ class LoopsFieldBaseline < ApplicationRecord
     "#{type} - #{name}"
   end
 end
-
-

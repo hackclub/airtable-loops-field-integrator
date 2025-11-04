@@ -10,15 +10,15 @@ Rails.application.routes.draw do
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
   # Sidekiq Web UI
-  require 'sidekiq/web'
-  mount Sidekiq::Web => '/sidekiq'
+  require "sidekiq/web"
+  mount Sidekiq::Web => "/sidekiq"
 
   # Email audit log viewer
-  get 'emails', to: 'emails#index'
-  get 'emails/:email', to: 'emails#show', as: 'email_audit_log'
-  
+  get "emails", to: "emails#index"
+  get "emails/:email", to: "emails#show", as: "email_audit_log"
+
   # Sync sources management
   resources :sync_sources
-  
-  root 'emails#index'
+
+  root "emails#index"
 end

@@ -134,15 +134,15 @@ puts "  Audit records created: #{audits.count}"
 puts "\nStep 7: Verifying via Loops API..."
 begin
   contact = LoopsService.find_contact(email: TEST_EMAIL)
-  
+
   if contact.is_a?(Array) && contact.any?
     contact_data = contact.first
     puts "  ✓ Contact found in Loops"
     puts "  Contact ID: #{contact_data['id']}"
-    
+
     field_value = contact_data['tmpZachLoopsApiTest']
     puts "  Field value in Loops: #{field_value.inspect}"
-    
+
     if field_value == TEST_VALUE
       puts "\n" + "=" * 80
       puts "SUCCESS! Value propagated correctly to Loops API"
@@ -164,4 +164,3 @@ rescue => e
 end
 
 puts "\nDone!"
-

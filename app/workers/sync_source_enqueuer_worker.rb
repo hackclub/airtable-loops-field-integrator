@@ -26,5 +26,3 @@ class SyncSourceEnqueuerWorker
     end
   end
 end
-
-

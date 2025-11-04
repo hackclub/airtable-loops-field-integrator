@@ -14,9 +14,7 @@ class CreateSyncSources < ActiveRecord::Migration[8.0]
       t.jsonb    :error_details,        null: false, default: {}
       t.timestamps
     end
-    add_index :sync_sources, [:source, :source_id], unique: true
+    add_index :sync_sources, [ :source, :source_id ], unique: true
     add_index :sync_sources, :next_poll_at
   end
 end
-
-

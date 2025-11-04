@@ -10,4 +10,3 @@ class ChangeCursorToJsonb < ActiveRecord::Migration[8.0]
     change_column :sync_sources, :cursor, :string, using: 'CASE WHEN cursor IS NULL THEN NULL ELSE cursor::text END'
   end
 end
-

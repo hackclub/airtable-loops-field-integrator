@@ -19,12 +19,12 @@ class CreateFieldValueBaselines < ActiveRecord::Migration[8.0]
     end
 
     # Unique index on [sync_source_id, row_id, field_id] for uniqueness
-    add_index :field_value_baselines, [:sync_source_id, :row_id, :field_id], 
-              unique: true, 
+    add_index :field_value_baselines, [ :sync_source_id, :row_id, :field_id ],
+              unique: true,
               name: "index_field_value_baselines_on_sync_source_row_field"
 
     # Index on last_checked_at for pruning stale entries
-    add_index :field_value_baselines, :last_checked_at, 
+    add_index :field_value_baselines, :last_checked_at,
               name: "idx_field_value_baselines_last_checked_at"
 
     # Index on value_last_updated_at for change tracking
@@ -33,4 +33,3 @@ class CreateFieldValueBaselines < ActiveRecord::Migration[8.0]
     # Note: sync_source_id index is already created by t.references above
   end
 end
-

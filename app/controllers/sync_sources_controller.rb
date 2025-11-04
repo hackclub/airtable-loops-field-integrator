@@ -1,12 +1,12 @@
 class SyncSourcesController < ApplicationController
-  before_action :set_sync_source, only: [:show, :edit, :update, :destroy]
+  before_action :set_sync_source, only: [ :show, :edit, :update, :destroy ]
 
   def index
     # Fetch all Airtable bases
     begin
       @bases = AirtableService::Bases.find_each.to_a
-      @sync_sources_by_base_id = SyncSource.where(source: 'airtable').index_by(&:source_id)
-      
+      @sync_sources_by_base_id = SyncSource.where(source: "airtable").index_by(&:source_id)
+
       # Sort bases to show active sync sources on top
       @bases.sort_by! do |base|
         sync_source = @sync_sources_by_base_id[base["id"]]
@@ -31,7 +31,7 @@ class SyncSourcesController < ApplicationController
   def new
     @sync_source = AirtableSyncSource.new
     @base_id = params[:base_id]
-    
+
     # Fetch available bases for dropdown
     begin
       @available_bases = AirtableService::Bases.find_each.to_a
@@ -43,8 +43,8 @@ class SyncSourcesController < ApplicationController
 
   def create
     @sync_source = AirtableSyncSource.new(sync_source_params)
-    @sync_source.source = 'airtable'
-    
+    @sync_source.source = "airtable"
+
     # Set display_name from Airtable base name if available
     if @sync_source.source_id.present?
       begin
@@ -58,9 +58,9 @@ class SyncSourcesController < ApplicationController
         Rails.logger.warn("Failed to fetch base name for #{@sync_source.source_id}: #{e.message}")
       end
     end
-    
+
     if @sync_source.save
-      redirect_to sync_source_path(@sync_source), notice: 'Sync source was successfully created.'
+      redirect_to sync_source_path(@sync_source), notice: "Sync source was successfully created."
     else
       begin
         @available_bases = AirtableService::Bases.find_each.to_a
@@ -77,7 +77,7 @@ class SyncSourcesController < ApplicationController
 
   def update
     if @sync_source.update(sync_source_params)
-      redirect_to sync_source_path(@sync_source), notice: 'Sync source was successfully updated.'
+      redirect_to sync_source_path(@sync_source), notice: "Sync source was successfully updated."
     else
       render :edit, status: :unprocessable_entity
     end
@@ -85,7 +85,7 @@ class SyncSourcesController < ApplicationController
 
   def destroy
     @sync_source.destroy
-    redirect_to sync_sources_path, notice: 'Sync source was successfully deleted.'
+    redirect_to sync_sources_path, notice: "Sync source was successfully deleted."
   end
 
   private
@@ -99,4 +99,3 @@ class SyncSourcesController < ApplicationController
     params.require(params[:sync_source] ? :sync_source : :airtable_sync_source).permit(:source_id, :poll_interval_seconds, :poll_jitter)
   end
 end
-

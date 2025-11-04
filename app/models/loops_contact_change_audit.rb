@@ -7,4 +7,3 @@ class LoopsContactChangeAudit < ApplicationRecord
   scope :for_sync_source, ->(source) { where(sync_source_id: source.id) }
   scope :since, ->(time) { where("occurred_at >= ?", time) }
 end
-

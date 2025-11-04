@@ -4,12 +4,12 @@ require "timeout"
 class SyncSourcePollWorkerTest < ActiveSupport::TestCase
   # Disable parallelization for this test class since we're testing thread concurrency
   parallelize(workers: 1)
-  
+
   # Disable transactional tests for this test class
   # Advisory locks are session-level, not transaction-level, so transactional
   # test fixtures can interfere with lock behavior
   self.use_transactional_tests = false
-  
+
   def setup
     @sync_source = SyncSource.create!(
       source: "airtable",
@@ -48,10 +48,10 @@ class SyncSourcePollWorkerTest < ActiveSupport::TestCase
       def call(sync_source)
         # Signal that we've started executing (lock is held)
         @lock_signal.push(true) rescue nil
-        
+
         # Increment execution counter
         @mutex.synchronize { @counter[:value] += 1 }
-        
+
         # Block for enough time to ensure second thread attempts while we hold lock
         # This gives us confidence that the lock mechanism works
         sleep(0.5)
@@ -61,11 +61,11 @@ class SyncSourcePollWorkerTest < ActiveSupport::TestCase
     # Stub Poller.for to return our mock
     original_for = Poller.method(:for)
     Poller.define_singleton_method(:for) { |_sync_source| mock_poller }
-    
+
     begin
       # Clear any existing locks first
       cleanup_advisory_locks
-      
+
       # Start first job in a thread - it will acquire lock
       # The worker already uses connection_pool.with_connection internally
       t1 = Thread.new do
@@ -75,7 +75,7 @@ class SyncSourcePollWorkerTest < ActiveSupport::TestCase
           flunk("Thread 1 error: #{e.class} - #{e.message}\n#{e.backtrace.join("\n")}")
         end
       end
-      
+
       # Wait for first thread to acquire lock and start executing poller
       # This ensures the lock is definitely held before second thread tries
       # The Queue.pop will block until the first thread signals it has the lock
@@ -86,10 +86,10 @@ class SyncSourcePollWorkerTest < ActiveSupport::TestCase
       rescue Timeout::Error
         flunk("Timeout waiting for first thread to acquire lock - test setup issue")
       end
-      
+
       # Small additional delay to ensure lock is fully established in the database
       sleep(0.1)
-      
+
       # Now start second thread - should skip because lock is held
       # The worker will try to acquire the lock, fail, and return early
       t2 = Thread.new do
@@ -99,7 +99,7 @@ class SyncSourcePollWorkerTest < ActiveSupport::TestCase
           flunk("Thread 2 error: #{e.class} - #{e.message}\n#{e.backtrace.join("\n")}")
         end
       end
-      
+
       # Wait for both threads to complete
       unless t1.join(5)
         t1.kill
@@ -109,10 +109,10 @@ class SyncSourcePollWorkerTest < ActiveSupport::TestCase
         t2.kill
         flunk("Thread 2 did not complete within timeout")
       end
-      
+
       # Verify only one execution occurred
       execution_mutex.synchronize do
-        assert_equal 1, execution_count[:value], 
+        assert_equal 1, execution_count[:value],
           "Only one job should execute (got #{execution_count[:value]}). The lock should prevent concurrent execution."
       end
     ensure
@@ -121,7 +121,7 @@ class SyncSourcePollWorkerTest < ActiveSupport::TestCase
       # Clean up any remaining locks
       cleanup_advisory_locks
       # Ensure all threads are cleaned up
-      [t1, t2].each { |t| t.kill if t && t.alive? }
+      [ t1, t2 ].each { |t| t.kill if t && t.alive? }
     end
   end
 
@@ -141,14 +141,14 @@ class SyncSourcePollWorkerTest < ActiveSupport::TestCase
 
     original_for = Poller.method(:for)
     Poller.define_singleton_method(:for) { |_sync_source| mock_poller }
-    
+
     begin
       # Run first job and wait for completion
       SyncSourcePollWorker.new.perform(@sync_source.id)
-      
+
       # Small delay to ensure lock is released
       sleep(0.05)
-      
+
       # Run second job - should succeed now
       SyncSourcePollWorker.new.perform(@sync_source.id)
     ensure
@@ -181,7 +181,7 @@ class SyncSourcePollWorkerTest < ActiveSupport::TestCase
 
     original_for = Poller.method(:for)
     Poller.define_singleton_method(:for) { |_sync_source| mock_poller }
-    
+
     begin
       # Run first job - expect it to raise
       assert_raises(StandardError) do
@@ -223,15 +223,15 @@ class SyncSourcePollWorkerTest < ActiveSupport::TestCase
 
     original_for = Poller.method(:for)
     Poller.define_singleton_method(:for) { |_sync_source| mock_poller }
-    
+
     begin
       threads = []
-      
+
       # Start both jobs concurrently with different IDs
       threads << Thread.new do
         SyncSourcePollWorker.new.perform(@sync_source.id)
       end
-      
+
       threads << Thread.new do
         SyncSourcePollWorker.new.perform(sync_source2.id)
       end
@@ -267,7 +267,7 @@ class SyncSourcePollWorkerTest < ActiveSupport::TestCase
 
     original_for = Poller.method(:for)
     Poller.define_singleton_method(:for) { |_sync_source| mock_poller }
-    
+
     begin
       SyncSourcePollWorker.new.perform(@sync_source.id)
     ensure
@@ -281,7 +281,7 @@ class SyncSourcePollWorkerTest < ActiveSupport::TestCase
 
   test "skips when sync_source does not exist" do
     non_existent_id = 99999
-    
+
     # Create a poller that should not be called
     # Use a hash so we can track calls by reference
     call_tracker = { count: 0 }
@@ -294,10 +294,10 @@ class SyncSourcePollWorkerTest < ActiveSupport::TestCase
         @call_counter[:count] += 1
       end
     end.new(call_tracker)
-    
+
     original_for = Poller.method(:for)
     Poller.define_singleton_method(:for) { |_sync_source| mock_poller }
-    
+
     begin
       # Should not raise, just return early
       assert_nothing_raised do
@@ -306,7 +306,7 @@ class SyncSourcePollWorkerTest < ActiveSupport::TestCase
     ensure
       Poller.define_singleton_method(:for, original_for)
     end
-    
+
     # Mock should not be called - check the hash that was actually modified
     assert_equal 0, call_tracker[:count], "Poller should not be called when sync_source doesn't exist"
   end

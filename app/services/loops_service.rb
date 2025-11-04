@@ -36,7 +36,7 @@ class LoopsService
     def initialize(status_code, response_body)
       @status_code = status_code
       @response_body = response_body
-      
+
       # Try to parse error message from JSON response
       error_message = begin
         error_json = JSON.parse(response_body) rescue nil
@@ -44,7 +44,7 @@ class LoopsService
       rescue
         "Loops API error: #{status_code}"
       end
-      
+
       super(error_message)
     end
   end
@@ -62,12 +62,12 @@ class LoopsService
       unless email || userId
         raise ArgumentError, "Either email or userId must be provided"
       end
-      
+
       body = {}
       body[:email] = EmailNormalizer.normalize(email) if email
       body[:userId] = userId if userId
       body.merge!(kwargs)
-      
+
       make_request(:put, "#{API_URL}/contacts/update", body: body)
     end
 
@@ -83,10 +83,10 @@ class LoopsService
       params = {}
       params[:email] = EmailNormalizer.normalize(email) if email
       params[:userId] = userId if userId
-      
+
       query_string = params.map { |k, v| "#{k}=#{CGI.escape(v.to_s)}" }.join("&")
       url = "#{API_URL}/contacts/find?#{query_string}"
-      
+
       make_request(:get, url)
     end
 
@@ -151,7 +151,7 @@ class LoopsService
         # Handle 429 Rate Limit responses with retry
         if status == 429
           new_retry_count = retry_count + 1
-          
+
           if new_retry_count > max_retries
             # Get error body and message
             resp_obj = response_error.is_a?(HTTPX::HTTPError) ? response_error.response : response
@@ -167,12 +167,12 @@ class LoopsService
 
           # Calculate exponential backoff delay
           backoff_delay = initial_backoff * (2 ** (new_retry_count - 1))
-          
+
           # Optionally use rate limit headers to determine wait time
           resp_obj = response_error.is_a?(HTTPX::HTTPError) ? response_error.response : response
           headers = resp_obj.headers
           # HTTPX headers can be accessed as hash with string or symbol keys, case-insensitive
-          rate_limit_remaining = headers["x-ratelimit-remaining"] || 
+          rate_limit_remaining = headers["x-ratelimit-remaining"] ||
                                   headers[:"x-ratelimit-remaining"] ||
                                   headers["X-RateLimit-Remaining"] ||
                                   headers[:"X-RateLimit-Remaining"]
@@ -180,17 +180,17 @@ class LoopsService
           if rate_limit_remaining && rate_limit_remaining == 0
             # If rate limit is exhausted, wait longer
             # Calculate wait time based on rate limit window (1 second)
-            backoff_delay = [backoff_delay, 1.0].max
+            backoff_delay = [ backoff_delay, 1.0 ].max
           end
 
           sleep(backoff_delay)
-          
+
           # Retry the request
           return make_request(method, url, body: body, max_retries: max_retries, retry_count: new_retry_count)
         end
 
         # Handle other error status codes
-        unless [200, 201].include?(status)
+        unless [ 200, 201 ].include?(status)
           resp_obj = response_error.is_a?(HTTPX::HTTPError) ? response_error.response : response
           error_body = resp_obj.body.to_s
           begin
@@ -205,7 +205,7 @@ class LoopsService
         # Parse JSON response
         resp_obj = response_error.is_a?(HTTPX::HTTPError) ? response_error.response : response
         return nil if resp_obj.body.to_s.empty?
-        
+
         begin
           resp_obj.json
         rescue => e
@@ -222,4 +222,3 @@ class LoopsService
     end
   end
 end
-

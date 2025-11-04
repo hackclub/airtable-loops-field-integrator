@@ -26,7 +26,7 @@ class FieldValueBaseline < ApplicationRecord
       field_id: field_id
     )
     first_time = bl.new_record?
-    
+
     # Capture old value BEFORE updating baseline
     old_value = bl.last_known_value
 
@@ -80,4 +80,3 @@ class FieldValueBaseline < ApplicationRecord
     end
   end
 end
-

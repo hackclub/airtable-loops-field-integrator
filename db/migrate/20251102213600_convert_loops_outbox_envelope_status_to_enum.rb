@@ -34,7 +34,7 @@ class ConvertLoopsOutboxEnvelopeStatusToEnum < ActiveRecord::Migration[8.0]
     rename_column :loops_outbox_envelopes, :status_new, :status
 
     # Recreate indexes (they were dropped when we removed the column)
-    add_index :loops_outbox_envelopes, [:email_normalized, :status], 
+    add_index :loops_outbox_envelopes, [ :email_normalized, :status ],
               name: "index_loops_outbox_envelopes_on_email_normalized_and_status"
     add_index :loops_outbox_envelopes, :status
   end
@@ -63,7 +63,7 @@ class ConvertLoopsOutboxEnvelopeStatusToEnum < ActiveRecord::Migration[8.0]
     rename_column :loops_outbox_envelopes, :status_int, :status
 
     # Recreate indexes
-    add_index :loops_outbox_envelopes, [:email_normalized, :status], 
+    add_index :loops_outbox_envelopes, [ :email_normalized, :status ],
               name: "index_loops_outbox_envelopes_on_email_normalized_and_status"
     add_index :loops_outbox_envelopes, :status
 
@@ -71,4 +71,3 @@ class ConvertLoopsOutboxEnvelopeStatusToEnum < ActiveRecord::Migration[8.0]
     execute "DROP TYPE IF EXISTS loops_outbox_envelope_status;"
   end
 end
-

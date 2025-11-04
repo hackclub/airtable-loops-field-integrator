@@ -30,14 +30,12 @@ module Pollable
 
   def mark_failure!(err_hash, max_backoff: 30.minutes)
     n = consecutive_failures + 1
-    penalty = [2**[n, 10].min, 1].max
+    penalty = [ 2**[ n, 10 ].min, 1 ].max
     update_columns(
       consecutive_failures: n,
       error_details: (error_details || {}).merge(err_hash),
-      next_poll_at: [next_poll_at, Time.current].max + [poll_interval_seconds * penalty, max_backoff].min,
+      next_poll_at: [ next_poll_at, Time.current ].max + [ poll_interval_seconds * penalty, max_backoff ].min,
       updated_at: Time.current
     )
   end
 end
-
-

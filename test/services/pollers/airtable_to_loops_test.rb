@@ -29,7 +29,7 @@ module Pollers
       }
 
       email_field = { "id" => "fldEmail", "name" => "email" }
-      
+
       # Find Loops fields (this matches the actual logic)
       loops_fields = {}
       table["fields"].each do |field|
@@ -58,7 +58,7 @@ module Pollers
             "Loops - lastName" => "Doe",
             "Zapier - Added to Midnight Loops list at" => "2024-01-01",
             "referral_target" => "target123",
-            "inbound_referrals" => ["ref1", "ref2"]
+            "inbound_referrals" => [ "ref1", "ref2" ]
           }
         }
       ]
@@ -82,7 +82,7 @@ module Pollers
 
       # Should only have baselines for Loops fields (format: "field_id/field_name")
       assert_equal 2, baselines.count, "Should create 2 baselines (one for each Loops field)"
-      
+
       assert baseline_field_ids.any? { |id| id.include?("Loops - firstName") },
         "Should have baseline for Loops - firstName"
       assert baseline_field_ids.any? { |id| id.include?("Loops - lastName") },
@@ -120,7 +120,7 @@ module Pollers
       ]
 
       poller = Pollers::AirtableToLoops.new
-      
+
       # First call - should detect change (first time)
       changed_records1 = poller.send(
         :detect_changes,
@@ -212,7 +212,7 @@ module Pollers
 
       # Should return empty array since no Loops fields exist
       assert_equal 0, changed_records.size, "Should not detect changes when no Loops fields exist"
-      
+
       # Should not create any baselines
       baselines = FieldValueBaseline.where(sync_source: @sync_source)
       assert_equal 0, baselines.count, "Should not create any baselines when no Loops fields exist"
@@ -234,7 +234,7 @@ module Pollers
       }
 
       email_field = { "id" => "fldEmail", "name" => "email" }
-      
+
       # Find Loops fields using the actual find_loops_fields logic
       poller = Pollers::AirtableToLoops.new
       loops_fields = poller.send(:find_loops_fields, table)
@@ -253,7 +253,7 @@ module Pollers
             "email" => "test@example.com",
             "Loops - lastName" => "Sasha",
             "Zapier - Added to Midnight Loops list at" => nil,
-            "referral_target" => ["recBV0ElVYe4YEFzW"],
+            "referral_target" => [ "recBV0ElVYe4YEFzW" ],
             "inbound_referrals" => nil,
             "number_of_referrals" => 0,
             "Loops - birthday" => "2009-04-14",
@@ -280,7 +280,7 @@ module Pollers
 
       # Should only have baselines for Loops fields (format: "field_id/field_name")
       assert_equal 3, baselines.count, "Should create 3 baselines (one for each Loops field)"
-      
+
       assert baseline_field_ids.any? { |id| id.include?("Loops - lastName") },
         "Should have baseline for Loops - lastName"
       assert baseline_field_ids.any? { |id| id.include?("Loops - birthday") },
@@ -300,4 +300,3 @@ module Pollers
     end
   end
 end
-

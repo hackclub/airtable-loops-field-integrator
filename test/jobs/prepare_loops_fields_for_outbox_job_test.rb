@@ -210,7 +210,7 @@ class PrepareLoopsFieldsForOutboxJobTest < ActiveJob::TestCase
 
     # Check that field name is correctly mapped (prefix stripped)
     assert envelope.payload.key?("tmpZachLoopsApiTest2"), "Payload should contain the mapped field name"
-    
+
     # Check that strategy is :override
     field_data = envelope.payload["tmpZachLoopsApiTest2"]
     assert_equal "override", field_data["strategy"], "Strategy should be override for Override fields"
@@ -289,13 +289,12 @@ class PrepareLoopsFieldsForOutboxJobTest < ActiveJob::TestCase
 
     # Should NOT contain "Lists" field
     assert_not envelope.payload.key?("Lists"), "Should not process 'Loops - Lists' (starts with uppercase)"
-    
+
     # Should contain the valid field
     assert envelope.payload.key?("tmpZachLoopsApiTest"), "Should process 'Loops - tmpZachLoopsApiTest'"
     assert_equal "valid_value", envelope.payload["tmpZachLoopsApiTest"]["value"]
-    
+
     # Should only have one field in payload
     assert_equal 1, envelope.payload.keys.size, "Should only process one field"
   end
 end
-

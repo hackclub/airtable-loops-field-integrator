@@ -15,7 +15,7 @@ class LoopsDispatchWorker
   def perform
     # Batch envelopes by email using FOR UPDATE SKIP LOCKED for concurrent workers
     processed_count = 0
-    
+
     loop do
       # Get a batch of queued envelopes (skip locked to allow concurrent workers)
       # Lock the envelopes themselves, then group by email
@@ -29,7 +29,7 @@ class LoopsDispatchWorker
 
       # Group by email and process each email
       envelopes_by_email = envelopes.group_by(&:email_normalized)
-      
+
       envelopes_by_email.each do |email_normalized, email_envelopes|
         process_email(email_normalized)
         processed_count += 1
@@ -48,7 +48,7 @@ class LoopsDispatchWorker
       result = connection.execute(
         "SELECT pg_try_advisory_lock(#{lock_key})"
       )
-      
+
       lock_acquired = result.first["pg_try_advisory_lock"]
       unless lock_acquired
         Rails.logger.debug("LoopsDispatchWorker: Skipping #{email_normalized} - already processing")
@@ -107,17 +107,17 @@ class LoopsDispatchWorker
         response = nil
         begin
           response = LoopsService.update_contact(email: email_normalized, **loops_payload)
-          
+
           # Fix response parsing: Loops API returns {"success"=>true, "id"=>"..."}
           # Use "id" as request_id if present, otherwise generate UUID
           request_id = response&.dig("id") || response&.dig("request_id") || SecureRandom.uuid
-          
+
           # Validate that the update actually succeeded
           # Loops API returns {"success"=>true, "id"=>"..."} on success
           unless response && response["success"] == true
             error_msg = "Loops API update did not succeed. Response: #{response.inspect}"
             Rails.logger.error("LoopsDispatchWorker: #{error_msg}")
-            
+
             # Mark envelopes as failed and store full error details in DB for debugging
             envelopes.each do |envelope|
               envelope.update!(
@@ -136,7 +136,7 @@ class LoopsDispatchWorker
           # Mark envelopes as failed and store full error details in DB for debugging
           Rails.logger.error("LoopsDispatchWorker: Error updating Loops contact: #{e.class} - #{e.message}")
           Rails.logger.error("LoopsDispatchWorker: Error backtrace: #{e.backtrace.first(5).join("\n")}")
-          
+
           envelopes.each do |envelope|
             envelope.update!(
               status: :failed,
@@ -160,18 +160,18 @@ class LoopsDispatchWorker
           filtered_payload.each do |field_name, field_data|
             if loops_payload.key?(field_name)
               sent_fields << field_name
-              
+
               # Find or create baseline and capture old value BEFORE updating
               baseline = LoopsFieldBaseline.find_or_create_baseline(
                 email_normalized: email_normalized,
                 field_name: field_name
               )
               former_loops_value = baseline.last_sent_value
-              
+
               # Extract value from field_data (handle both string and symbol keys)
               field_data_hash = field_data.is_a?(Hash) ? field_data : {}
               value_to_send = loops_payload[field_name]  # Use the value that was actually sent to Loops
-              
+
               # Validate that the API call succeeded before updating baseline
               # This ensures baseline only reflects values that were actually persisted in Loops
               if response && response["success"] == true
@@ -188,9 +188,9 @@ class LoopsDispatchWorker
               # Create audit record
               # Find provenance from first envelope (they should all have same provenance per email)
               provenance = envelopes.first.provenance
-              
+
               # Extract field provenance - match by field name
-              field_provenance = provenance["fields"]&.find { |f| 
+              field_provenance = provenance["fields"]&.find { |f|
                 # Match by field name - map back from loops_field_name to sync source field
                 sync_source_field_name = f["sync_source_field_name"]
                 sync_source_field_name&.sub(/\ALoops\s*-\s*/i, "") == field_name ||
@@ -200,10 +200,10 @@ class LoopsDispatchWorker
               # Build sync-source-agnostic provenance metadata for audit record
               # This stores sync-source-specific identifiers from the envelope provenance
               audit_provenance = {}
-              
+
               # Store sync-source-agnostic identifiers
               audit_provenance["sync_source_type"] = provenance["sync_source_type"]
-              
+
               # Add sync-source-specific metadata if present
               # Metadata comes from sync_source.metadata and includes source_id
               if provenance["sync_source_metadata"]
@@ -219,7 +219,7 @@ class LoopsDispatchWorker
                 audit_provenance_with_response = audit_provenance.dup
                 audit_provenance_with_response["loops_api_response"] = response
                 audit_provenance_with_response["loops_payload_sent"] = loops_payload  # Store full payload that was sent
-                
+
                 LoopsContactChangeAudit.create!(
                   occurred_at: Time.current,
                   email_normalized: email_normalized,
@@ -274,11 +274,11 @@ class LoopsDispatchWorker
   # Merge multiple envelopes: combine payloads, latest modified_at wins per field
   def merge_envelopes(envelopes)
     merged = {}
-    
+
     envelopes.each do |envelope|
       envelope.payload.each do |field_name, field_data|
         existing = merged[field_name]
-        
+
         if existing.nil?
           merged[field_name] = field_data.dup
         else
@@ -286,20 +286,20 @@ class LoopsDispatchWorker
           # Handle both string and symbol keys (JSONB from DB has string keys)
           existing_hash = existing.is_a?(Hash) ? existing : {}
           field_data_hash = field_data.is_a?(Hash) ? field_data : {}
-          
+
           existing_modified_at = existing_hash[:modified_at] || existing_hash["modified_at"]
           new_modified_at = field_data_hash[:modified_at] || field_data_hash["modified_at"]
-          
+
           existing_time = Time.parse(existing_modified_at.to_s) rescue Time.at(0)
           new_time = Time.parse(new_modified_at.to_s) rescue Time.at(0)
-          
+
           if new_time > existing_time
             merged[field_name] = field_data.dup
           end
         end
       end
     end
-    
+
     merged
   end
 
@@ -307,25 +307,25 @@ class LoopsDispatchWorker
   # For :override strategy fields, always include (even if value matches baseline)
   def filter_by_baselines(email_normalized, merged_payload)
     filtered = {}
-    
+
     merged_payload.each do |field_name, field_data|
       # Handle both string and symbol keys
       field_data_hash = field_data.is_a?(Hash) ? field_data : {}
       current_value = field_data_hash[:value] || field_data_hash["value"]
       strategy = (field_data_hash[:strategy] || field_data_hash["strategy"])&.to_sym || :upsert
-      
+
       # For override strategy, always include (even if value matches baseline)
       # This allows override fields to explicitly set null values
       if strategy == :override
         filtered[field_name] = field_data
         next
       end
-      
+
       baseline = LoopsFieldBaseline.find_by(
         email_normalized: email_normalized,
         field_name: field_name
       )
-      
+
       if baseline.nil?
         # No baseline - include field
         filtered[field_name] = field_data
@@ -340,20 +340,20 @@ class LoopsDispatchWorker
         Rails.logger.debug("LoopsDispatchWorker: Skipping #{field_name} for #{email_normalized} - unchanged")
       end
     end
-    
+
     filtered
   end
 
   # Apply strategies: :upsert (only update if value is not nil), :override (always update)
   def apply_strategies(filtered_payload)
     result = {}
-    
+
     filtered_payload.each do |field_name, field_data|
       # Handle both string and symbol keys
       field_data_hash = field_data.is_a?(Hash) ? field_data : {}
       strategy = (field_data_hash[:strategy] || field_data_hash["strategy"])&.to_sym || :upsert
       value = field_data_hash[:value] || field_data_hash["value"]
-      
+
       case strategy
       when :upsert
         # Only include if value is not nil
@@ -370,8 +370,7 @@ class LoopsDispatchWorker
         end
       end
     end
-    
+
     result
   end
 end
-

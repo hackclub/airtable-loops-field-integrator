@@ -7,5 +7,3 @@ module Poller
     end
   end
 end
-
-

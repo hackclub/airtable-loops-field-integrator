@@ -14,7 +14,7 @@ class CreateLoopsContactChangeAudits < ActiveRecord::Migration[8.0]
       t.string :record_id  # Airtable record ID
       t.string :airtable_field_id  # Airtable field ID
       t.string :request_id  # Loops API request ID for tracing
-      
+
       t.timestamps
     end
 
@@ -22,7 +22,6 @@ class CreateLoopsContactChangeAudits < ActiveRecord::Migration[8.0]
     add_index :loops_contact_change_audits, :email_normalized
     add_index :loops_contact_change_audits, :occurred_at
     # sync_source_id index is already created by t.references above
-    add_index :loops_contact_change_audits, [:email_normalized, :occurred_at]
+    add_index :loops_contact_change_audits, [ :email_normalized, :occurred_at ]
   end
 end
-

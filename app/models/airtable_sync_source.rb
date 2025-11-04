@@ -8,4 +8,3 @@ class AirtableSyncSource < SyncSource
     self.metadata ||= {}
   end
 end
-

@@ -49,7 +49,7 @@ class PrepareLoopsFieldsForOutboxJob
     #     "modified_at" => "ISO8601 timestamp"
     #   }
     # }
-    
+
     # Normalize email
     email_normalized = EmailNormalizer.normalize(email)
     return unless email_normalized
@@ -61,35 +61,35 @@ class PrepareLoopsFieldsForOutboxJob
     changed_fields.each do |field_key, field_data|
       # Extract field name from key (format: "field_id/field_name")
       field_name = field_key.split("/", 2).last
-      
+
       # Skip if not a Loops field (must start with "Loops - " or "Loops - Override - ")
       next unless field_name =~ /\ALoops\s*-\s*/i
-      
+
       # Extract field name without prefix to check if it's lowerCamelCase
       field_name_without_prefix = field_name.sub(/\ALoops\s*-\s*(Override\s*-\s*)?/i, "")
-      
+
       # Skip if field name doesn't start with lowercase (not lowerCamelCase)
       # This prevents matching fields like "Loops - Lists" which starts with uppercase
       next unless field_name_without_prefix =~ /\A[a-z]/
-      
+
       # Extract field_id from key
       field_id = field_key.split("/", 2).first
-      
+
       # Map field name and determine strategy
       loops_field_name, strategy = map_field_name_and_strategy(field_name)
-      
+
       # Extract values
       value = field_data["value"]
       old_value = field_data["old_value"]
       modified_at = field_data["modified_at"] || Time.current.iso8601
-      
+
       # Add to envelope
       envelope[loops_field_name] = {
         value: value,
         strategy: strategy,
         modified_at: modified_at
       }
-      
+
       # Add to provenance fields
       provenance_fields << {
         sync_source_field_id: field_id,
@@ -125,7 +125,7 @@ class PrepareLoopsFieldsForOutboxJob
   def map_field_name_and_strategy(field_name)
     # Check if field name contains "Override"
     has_override = field_name =~ /\ALoops\s*-\s*Override\s*-\s*/i
-    
+
     if has_override
       # Strip "Loops - Override - " prefix
       loops_field_name = field_name.sub(/\ALoops\s*-\s*Override\s*-\s*/i, "")
@@ -135,15 +135,15 @@ class PrepareLoopsFieldsForOutboxJob
       loops_field_name = field_name.sub(/\ALoops\s*-\s*/i, "")
       strategy = :upsert
     end
-    
-    [loops_field_name, strategy]
+
+    [ loops_field_name, strategy ]
   end
 
   # Build provenance metadata
   def build_provenance(sync_source_id, table_id, record_id, fields_array)
     sync_source = SyncSource.find_by(id: sync_source_id)
     sync_source_type = sync_source&.source || "unknown"
-    
+
     provenance = {
       sync_source_id: sync_source_id,
       sync_source_type: sync_source_type,
@@ -152,14 +152,13 @@ class PrepareLoopsFieldsForOutboxJob
       fields: fields_array,
       created_from: "#{sync_source_type}_poller"
     }
-    
+
     if sync_source
       provenance[:sync_source_metadata] = {
         source_id: sync_source.source_id
       }.merge(sync_source.metadata || {})
     end
-    
+
     provenance
   end
 end
-

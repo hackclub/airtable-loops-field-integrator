@@ -309,11 +309,10 @@ class RateLimiterTest < ActiveSupport::TestCase
 
     # Check TTL - should be approximately 60 seconds (period) + 2 seconds (buffer) = 62 seconds
     ttl = @redis.ttl(test_key)
-    
+
     # TTL should be close to 62 seconds (60s period + 2s buffer)
     # Allow some margin for timing precision
     assert ttl >= 55, "TTL should be based on period (60s), not limit. Got #{ttl}s, expected ~62s"
     assert ttl <= 65, "TTL shouldn't be too long. Got #{ttl}s, expected ~62s"
   end
 end
-

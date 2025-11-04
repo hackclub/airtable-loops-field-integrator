@@ -182,7 +182,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
   end
 
   test "detect_change handles array values" do
-    array_value = ["item1", "item2", "item3"]
+    array_value = [ "item1", "item2", "item3" ]
 
     result1 = FieldValueBaseline.detect_change(
       sync_source: @sync_source,
@@ -202,7 +202,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
     refute result2[:changed], "Same array should not be a change"
 
     # Different array (should change)
-    changed_array = ["item4", "item5"]
+    changed_array = [ "item4", "item5" ]
     result3 = FieldValueBaseline.detect_change(
       sync_source: @sync_source,
       row_id: @row_id,
@@ -427,10 +427,10 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
       field_id: @field_id,
       current_value: "first"
     )
-    
+
     assert result1.key?(:old_value), "Result should always include old_value key"
     assert_nil result1[:old_value], "old_value should be nil on first time"
-    
+
     # Second call - old_value should be "first"
     result2 = FieldValueBaseline.detect_change(
       sync_source: @sync_source,
@@ -438,11 +438,11 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
       field_id: @field_id,
       current_value: "second"
     )
-    
+
     assert result2.key?(:old_value), "Result should always include old_value key"
     assert_equal "first", result2[:old_value], "old_value should match previous value"
     assert_equal "first", result1[:baseline].last_known_value, "old_value should match previous baseline's last_known_value"
-    
+
     # Third call - old_value should be "second"
     result3 = FieldValueBaseline.detect_change(
       sync_source: @sync_source,
@@ -450,14 +450,14 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
       field_id: @field_id,
       current_value: "third"
     )
-    
+
     assert result3.key?(:old_value), "Result should always include old_value key"
     assert_equal "second", result3[:old_value], "old_value should chain correctly through multiple changes"
   end
 
   test "detect_change old_value matches previous baseline value even when unchanged" do
     value = "consistent"
-    
+
     # First call
     result1 = FieldValueBaseline.detect_change(
       sync_source: @sync_source,
@@ -466,7 +466,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
       current_value: value
     )
     assert_nil result1[:old_value]
-    
+
     # Second call with same value - old_value should still be the previous value
     result2 = FieldValueBaseline.detect_change(
       sync_source: @sync_source,
@@ -476,7 +476,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
     )
     assert_equal value, result2[:old_value], "old_value should be present even when value doesn't change"
     refute result2[:changed], "Should not be marked as changed"
-    
+
     # Third call with same value again
     result3 = FieldValueBaseline.detect_change(
       sync_source: @sync_source,
@@ -489,9 +489,9 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
 
   test "detect_change old_value tracks changes through complex sequences" do
     # Test a sequence: nil -> value -> nil -> different value -> same value
-    values = [nil, "first", nil, "second", "second"]
-    expected_old_values = [nil, nil, "first", nil, "second"]
-    
+    values = [ nil, "first", nil, "second", "second" ]
+    expected_old_values = [ nil, nil, "first", nil, "second" ]
+
     values.each_with_index do |current_value, index|
       result = FieldValueBaseline.detect_change(
         sync_source: @sync_source,
@@ -499,13 +499,13 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
         field_id: @field_id,
         current_value: current_value
       )
-      
+
       expected_old = expected_old_values[index]
       if expected_old.nil?
-        assert_nil result[:old_value], 
+        assert_nil result[:old_value],
           "old_value at step #{index + 1} should be nil, got #{result[:old_value].inspect}"
       else
-        assert_equal expected_old, result[:old_value], 
+        assert_equal expected_old, result[:old_value],
           "old_value at step #{index + 1} should be #{expected_old.inspect}, got #{result[:old_value].inspect}"
       end
     end
@@ -515,7 +515,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
     # Test with hash
     hash1 = { "key" => "value1" }
     hash2 = { "key" => "value2" }
-    
+
     result1 = FieldValueBaseline.detect_change(
       sync_source: @sync_source,
       row_id: @row_id,
@@ -523,7 +523,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
       current_value: hash1
     )
     assert_nil result1[:old_value]
-    
+
     result2 = FieldValueBaseline.detect_change(
       sync_source: @sync_source,
       row_id: @row_id,
@@ -531,11 +531,11 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
       current_value: hash2
     )
     assert_equal hash1, result2[:old_value], "old_value should work with hash values"
-    
+
     # Test with array
-    array1 = [1, 2, 3]
-    array2 = [4, 5, 6]
-    
+    array1 = [ 1, 2, 3 ]
+    array2 = [ 4, 5, 6 ]
+
     result3 = FieldValueBaseline.detect_change(
       sync_source: @sync_source,
       row_id: "tbl2_rec2",
@@ -543,7 +543,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
       current_value: array1
     )
     assert_nil result3[:old_value]
-    
+
     result4 = FieldValueBaseline.detect_change(
       sync_source: @sync_source,
       row_id: "tbl2_rec2",
@@ -553,6 +553,3 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
     assert_equal array1, result4[:old_value], "old_value should work with array values"
   end
 end
-
-
-

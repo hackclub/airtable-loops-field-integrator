@@ -200,6 +200,3 @@ class PruneFieldValueBaselinesWorkerTest < ActiveSupport::TestCase
     assert FieldValueBaseline.exists?(recent_baseline.id), "Recent baseline should remain"
   end
 end
-
-
-

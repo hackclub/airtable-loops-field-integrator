@@ -93,7 +93,7 @@ class AirtableServiceRateLimiterTest < ActiveSupport::TestCase
     # Should complete relatively quickly since we're well under 50 req/sec
     # But allow for network latency (each API call might take ~0.2-0.5s)
     assert elapsed < 3.0, "3 requests should complete in reasonable time (allows for API latency), took #{elapsed}s"
-    
+
     # Verify rate limiting is actually applied - requests should not all be immediate
     # Even under global limit, they should be properly throttled if needed
     assert elapsed >= 0.1, "Should take some time even for allowed requests"
@@ -110,14 +110,14 @@ class AirtableServiceRateLimiterTest < ActiveSupport::TestCase
       skip "No bases available for testing" if bases.empty?
 
       base_id = bases.first["id"]
-      
+
       # Clear rate limit state for this base
       redis_key = "rate:airtable:base:#{base_id}"
       REDIS_FOR_RATE_LIMITING.del(redis_key)
       REDIS_FOR_RATE_LIMITING.del("#{redis_key}:seq")
 
       start_time = Time.now
-      
+
       # First request should be immediate (no rate limiting)
       AirtableService::Bases.get_schema(base_id: base_id)
       time_after_1 = Time.now - start_time
@@ -136,20 +136,20 @@ class AirtableServiceRateLimiterTest < ActiveSupport::TestCase
 
       # First request includes API call time, should be reasonable (< 1s for API + overhead)
       assert time_after_1 < 1.0, "First request should complete in reasonable time, took #{time_after_1}s"
-      
+
       # Second request should wait ~1 second due to rate limiting before making API call
       # The rate limiter enforces a sliding window, so it waits until 1 second after the first request
       # Allow some flexibility (0.8s minimum to account for timing precision)
       assert second_duration >= 0.8, "Second request should wait ~1s for rate limit + API time, took #{second_duration}s"
       assert second_duration < 2.5, "Second request shouldn't take too long, took #{second_duration}s"
-      
+
       # Verify that rate limiting is actually working - second should take significantly longer than first
       assert second_duration > time_after_1 * 1.5, "Second request should take longer due to rate limiting (first: #{time_after_1}s, second: #{second_duration}s)"
-      
+
       # Third request should wait another ~1 second
       assert third_duration >= 0.8, "Third request should wait another ~1s, took #{third_duration}s"
       assert third_duration < 2.5, "Third request shouldn't take too long, took #{third_duration}s"
-      
+
       # Total time should reflect the rate limiting delays
       assert total_time >= 1.5, "Total time should reflect rate limiting delays, took #{total_time}s"
       assert total_time < 6.0, "Total time should be reasonable, took #{total_time}s"
@@ -167,7 +167,7 @@ class AirtableServiceRateLimiterTest < ActiveSupport::TestCase
       skip "No bases available for testing" if bases.empty?
 
       base_id = bases.first["id"]
-      
+
       # Clear rate limit state for this base
       redis_key = "rate:airtable:base:#{base_id}"
       REDIS_FOR_RATE_LIMITING.del(redis_key)
@@ -184,7 +184,7 @@ class AirtableServiceRateLimiterTest < ActiveSupport::TestCase
       second_duration = Time.now - second_start
 
       # Second request should take significantly longer due to rate limiting
-      assert second_duration > first_duration * 1.5, 
+      assert second_duration > first_duration * 1.5,
         "Second request should be rate limited (first: #{first_duration}s, second: #{second_duration}s)"
       assert second_duration >= 0.8, "Second request should wait at least ~1s, took #{second_duration}s"
     rescue => e
@@ -192,4 +192,3 @@ class AirtableServiceRateLimiterTest < ActiveSupport::TestCase
     end
   end
 end
-

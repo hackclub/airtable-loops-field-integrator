@@ -28,11 +28,11 @@ class RateLimiter
         local winFrom = tonumber(ARGV[2])
         local limit   = tonumber(ARGV[3])
         local period  = tonumber(ARGV[4])
-        
+
         -- remove old events
         redis.call("ZREMRANGEBYSCORE", key, 0, winFrom)
         local count = redis.call("ZCARD", key)
-        
+
         if count < limit then
           redis.call("ZADD", key, now, tostring(now) .. "-" .. redis.call("INCR", key .. ":seq"))
           -- keep tidy: expire the bucket a bit beyond the sliding window period
@@ -46,7 +46,7 @@ class RateLimiter
         end
       LUA
 
-      res = @redis.eval(script, keys: [@key], argv: [now_ms, window_start_ms, @limit, period_ms])
+      res = @redis.eval(script, keys: [ @key ], argv: [ now_ms, window_start_ms, @limit, period_ms ])
 
       if res == 1
         return Time.at(now_ms / 1000.0)
@@ -54,11 +54,10 @@ class RateLimiter
         # Need to wait until (oldest + period) is in the past
         oldest_ms = res.to_i
         sleep_ms  = (oldest_ms + (@period * 1000).to_i) - now_ms
-        sleep_time = [[sleep_ms, 5].max, (@period * 1000).to_i].min / 1000.0
+        sleep_time = [ [ sleep_ms, 5 ].max, (@period * 1000).to_i ].min / 1000.0
         # tiny jitter to avoid thundering herd
         sleep(sleep_time + rand * 0.01)
       end
     end
   end
 end
-

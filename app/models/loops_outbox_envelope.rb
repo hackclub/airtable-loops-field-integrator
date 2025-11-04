@@ -18,4 +18,3 @@ class LoopsOutboxEnvelope < ApplicationRecord
   scope :failed, -> { where(status: :failed) }
   scope :for_email, ->(email) { where(email_normalized: email) }
 end
-

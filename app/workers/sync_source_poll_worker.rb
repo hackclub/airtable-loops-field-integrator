@@ -18,16 +18,16 @@ class SyncSourcePollWorker
       result = connection.execute(
         "SELECT pg_try_advisory_lock(#{ADVISORY_LOCK_NAMESPACE}, #{connection.quote(id)})"
       )
-      
+
       # Check if lock was acquired (result is a boolean)
       lock_acquired = result.first["pg_try_advisory_lock"]
-      
+
       # If we couldn't acquire the lock, another job is already running
       unless lock_acquired
         Rails.logger.info("SyncSourcePollWorker: Skipping #{id} - already running")
         return
       end
-      
+
       begin
         s = SyncSource.find_by(id: id)
         return unless s
