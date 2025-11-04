@@ -68,7 +68,29 @@ class LoopsDispatchWorker
         sync_source = envelopes.first&.sync_source || SyncSource.find_by(id: envelopes.first&.provenance&.dig("sync_source_id"))
 
         # Preflight: check if contact exists and load baselines if needed
+        # This can raise LoopsService::ApiError if email is invalid
+        begin
         contact_exists = sync_source ? LoopsFieldBaseline.check_contact_existence_and_load_baselines(email_normalized: email_normalized) : true
+        rescue LoopsService::ApiError => e
+          # Mark envelopes as failed if preflight check fails (e.g., invalid email)
+          Rails.logger.error("LoopsDispatchWorker: Preflight check failed for #{email_normalized}: #{e.class} - #{e.message}")
+          ApplicationRecord.transaction do
+            envelopes.each do |envelope|
+              envelope.update_columns(
+                status: :failed,
+                error: {
+                  message: e.message,
+                  class: e.class.name,
+                  stage: "preflight_check",
+                  occurred_at: Time.current.iso8601
+                },
+                updated_at: Time.current
+              )
+            end
+          end
+          # Re-raise to mark job as failed
+          raise
+        end
 
         # Merge envelopes: combine payloads, latest modified_at wins per field
         merged_payload = merge_envelopes(envelopes)
@@ -118,18 +140,23 @@ class LoopsDispatchWorker
             error_msg = "Loops API update did not succeed. Response: #{response.inspect}"
             Rails.logger.error("LoopsDispatchWorker: #{error_msg}")
 
-            # Mark envelopes as failed and store full error details in DB for debugging
+            # Wrap envelope updates in a transaction to ensure they're committed
+            # Use update_columns to bypass validations and ensure persistence
+            ApplicationRecord.transaction do
             envelopes.each do |envelope|
-              envelope.update!(
+                envelope.update_columns(
                 status: :failed,
                 error: {
                   message: error_msg,
                   response: response,
                   loops_payload_sent: loops_payload,  # Store what was actually sent
                   occurred_at: Time.current.iso8601
-                }
+                  },
+                  updated_at: Time.current
               )
+              end
             end
+            # Raise exception after ensuring envelopes are marked as failed
             raise StandardError.new(error_msg)
           end
         rescue => e
@@ -137,18 +164,28 @@ class LoopsDispatchWorker
           Rails.logger.error("LoopsDispatchWorker: Error updating Loops contact: #{e.class} - #{e.message}")
           Rails.logger.error("LoopsDispatchWorker: Error backtrace: #{e.backtrace.first(5).join("\n")}")
 
+          # Wrap envelope updates in a transaction to ensure they're committed
+          # Use update_columns to bypass validations and ensure persistence
+          ApplicationRecord.transaction do
           envelopes.each do |envelope|
-            envelope.update!(
-              status: :failed,
-              error: {
+              error_hash = {
                 message: e.message,
                 class: e.class.name,
                 loops_payload_sent: loops_payload,  # Store what was actually sent
                 backtrace: e.backtrace.first(10),  # Store backtrace for debugging
                 occurred_at: Time.current.iso8601
               }
+              # Include response if available (e.g., when error comes from unsuccessful API response)
+              error_hash[:response] = response if defined?(response) && response
+              
+              envelope.update_columns(
+                status: :failed,
+                error: error_hash,
+                updated_at: Time.current
             )
           end
+          end
+          # Re-raise exception after ensuring envelopes are marked as failed
           raise
         end
 
@@ -253,6 +290,38 @@ class LoopsDispatchWorker
             envelopes.each { |e| e.update!(status: :partially_sent) }
           end
         end
+      rescue => e
+        # Catch any other unexpected errors in the processing pipeline
+        # (errors from update_contact are handled in the inner rescue block)
+        Rails.logger.error("LoopsDispatchWorker: Unexpected error processing #{email_normalized}: #{e.class} - #{e.message}")
+        Rails.logger.error("LoopsDispatchWorker: Error backtrace: #{e.backtrace.first(10).join("\n")}")
+        
+        # Mark envelopes as failed if we have them loaded
+        # Skip if envelopes are already marked as failed (e.g., from preflight check)
+        if defined?(envelopes) && envelopes && !envelopes.empty?
+          # Check if envelopes are already marked as failed
+          already_failed = envelopes.all? { |e| e.reload.status == "failed" }
+          
+          unless already_failed
+            ApplicationRecord.transaction do
+              envelopes.each do |envelope|
+                envelope.update_columns(
+                  status: :failed,
+                  error: {
+                    message: e.message,
+                    class: e.class.name,
+                    stage: "processing",
+                    backtrace: e.backtrace.first(10),
+                    occurred_at: Time.current.iso8601
+                  },
+                  updated_at: Time.current
+                )
+              end
+            end
+          end
+        end
+        # Re-raise to mark job as failed
+        raise
       ensure
         # Always release the lock
         connection.execute(

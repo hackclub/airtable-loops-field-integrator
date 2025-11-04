@@ -640,6 +640,396 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
     end
   end
 
+  test "marks envelopes as failed when LoopsService raises ApiError" do
+    # Track what gets sent to Loops API
+    sent_payload = nil
+    sent_email = nil
+
+    # Mock LoopsService.update_contact to raise ApiError
+    original_update_contact = LoopsService.method(:update_contact)
+    LoopsService.define_singleton_method(:update_contact) do |email:, **kwargs|
+      sent_payload = kwargs.dup
+      sent_email = email
+      raise LoopsService::ApiError.new(400, '{"message": "Invalid email address"}')
+    end
+
+    begin
+      base_time = Time.parse("2025-11-02T10:00:00Z")
+
+      # Create envelope that will fail
+      envelope = LoopsOutboxEnvelope.create!(
+        email_normalized: @email_normalized,
+        payload: {
+          "field1" => {
+            "value" => "value1",
+            "strategy" => "upsert",
+            "modified_at" => base_time.iso8601
+          }
+        },
+        status: :queued,
+        provenance: build_test_provenance,
+        sync_source_id: @sync_source.id
+      )
+
+      # Run the dispatch worker - should raise exception but mark envelope as failed
+      worker = LoopsDispatchWorker.new
+      assert_raises(LoopsService::ApiError) do
+        worker.perform
+      end
+
+      # Reload envelope and verify it was marked as failed
+      envelope.reload
+      assert_equal "failed", envelope.status, "Envelope should be marked as failed"
+
+      # Verify error details were stored
+      assert_not_nil envelope.error, "Error details should be stored"
+      assert_equal "Invalid email address", envelope.error["message"], "Error message should match"
+      assert_equal "LoopsService::ApiError", envelope.error["class"], "Error class should be stored"
+      assert_not_nil envelope.error["loops_payload_sent"], "Loops payload should be stored"
+      assert_equal "value1", envelope.error["loops_payload_sent"]["field1"], "Loops payload should contain field1"
+      assert_not_nil envelope.error["occurred_at"], "Occurred_at timestamp should be stored"
+
+      # Verify the API was called with correct payload
+      assert_not_nil sent_payload, "LoopsService.update_contact should have been called"
+      assert_equal "value1", sent_payload["field1"], "Correct payload should have been sent"
+
+    ensure
+      # Restore original method
+      LoopsService.define_singleton_method(:update_contact, original_update_contact)
+    end
+  end
+
+  test "marks envelopes as failed when LoopsService returns unsuccessful response" do
+    # Track what gets sent to Loops API
+    sent_payload = nil
+
+    # Mock LoopsService.update_contact to return unsuccessful response
+    original_update_contact = LoopsService.method(:update_contact)
+    LoopsService.define_singleton_method(:update_contact) do |email:, **kwargs|
+      sent_payload = kwargs.dup
+      { "success" => false, "message" => "Update failed" }
+    end
+
+    begin
+      base_time = Time.parse("2025-11-02T10:00:00Z")
+
+      # Create envelope that will fail
+      envelope = LoopsOutboxEnvelope.create!(
+        email_normalized: @email_normalized,
+        payload: {
+          "field1" => {
+            "value" => "value1",
+            "strategy" => "upsert",
+            "modified_at" => base_time.iso8601
+          }
+        },
+        status: :queued,
+        provenance: build_test_provenance,
+        sync_source_id: @sync_source.id
+      )
+
+      # Run the dispatch worker - should raise exception but mark envelope as failed
+      worker = LoopsDispatchWorker.new
+      assert_raises(StandardError) do
+        worker.perform
+      end
+
+      # Reload envelope and verify it was marked as failed
+      envelope.reload
+      assert_equal "failed", envelope.status, "Envelope should be marked as failed"
+
+      # Verify error details were stored
+      assert_not_nil envelope.error, "Error details should be stored"
+      assert_match(/Loops API update did not succeed/, envelope.error["message"], "Error message should indicate failure")
+      # CRITICAL: The rescue block should preserve the response from the unless block
+      # In the broken code, this would be nil because rescue overwrites without response
+      assert_not_nil envelope.error["response"], "Response should be stored - this test will fail with broken code"
+      assert_equal false, envelope.error["response"]["success"], "Response should indicate failure"
+      assert_not_nil envelope.error["loops_payload_sent"], "Loops payload should be stored"
+      assert_equal "value1", envelope.error["loops_payload_sent"]["field1"], "Loops payload should contain field1"
+      assert_not_nil envelope.error["occurred_at"], "Occurred_at timestamp should be stored"
+
+      # Verify the API was called with correct payload
+      assert_not_nil sent_payload, "LoopsService.update_contact should have been called"
+      assert_equal "value1", sent_payload["field1"], "Correct payload should have been sent"
+
+    ensure
+      # Restore original method
+      LoopsService.define_singleton_method(:update_contact, original_update_contact)
+    end
+  end
+
+  test "marks envelopes as failed when preflight check fails with invalid email" do
+    # Mock LoopsFieldBaseline.check_contact_existence_and_load_baselines to raise ApiError
+    original_method = LoopsFieldBaseline.method(:check_contact_existence_and_load_baselines)
+    LoopsFieldBaseline.define_singleton_method(:check_contact_existence_and_load_baselines) do |email_normalized:|
+      raise LoopsService::ApiError.new(400, '{"message": "Invalid email address"}')
+    end
+
+    begin
+      base_time = Time.parse("2025-11-02T10:00:00Z")
+
+      # Create envelope that will fail during preflight check
+      envelope = LoopsOutboxEnvelope.create!(
+        email_normalized: @email_normalized,
+        payload: {
+          "field1" => {
+            "value" => "value1",
+            "strategy" => "upsert",
+            "modified_at" => base_time.iso8601
+          }
+        },
+        status: :queued,
+        provenance: build_test_provenance,
+        sync_source_id: @sync_source.id
+      )
+
+      # Run the dispatch worker - should raise exception but mark envelope as failed
+      worker = LoopsDispatchWorker.new
+      assert_raises(LoopsService::ApiError) do
+        worker.perform
+      end
+
+      # Reload envelope and verify it was marked as failed
+      envelope.reload
+      assert_equal "failed", envelope.status, "Envelope should be marked as failed - THIS IS THE CRITICAL TEST"
+
+      # Verify error details were stored
+      assert_not_nil envelope.error, "Error details should be stored"
+      assert_equal "Invalid email address", envelope.error["message"], "Error message should match"
+      assert_equal "LoopsService::ApiError", envelope.error["class"], "Error class should be stored"
+      # With the fix, stage should be "preflight_check"
+      # Without the fix, it would be "processing" (caught by outer rescue)
+      assert_equal "preflight_check", envelope.error["stage"], "Error stage should indicate preflight_check - this verifies the fix works"
+      assert_not_nil envelope.error["occurred_at"], "Occurred_at timestamp should be stored"
+
+    ensure
+      # Restore original method
+      LoopsFieldBaseline.define_singleton_method(:check_contact_existence_and_load_baselines, original_method)
+    end
+  end
+
+  test "preflight check error handling: marks single envelope as failed with correct stage" do
+    # Mock LoopsFieldBaseline.check_contact_existence_and_load_baselines to raise ApiError
+    original_method = LoopsFieldBaseline.method(:check_contact_existence_and_load_baselines)
+    LoopsFieldBaseline.define_singleton_method(:check_contact_existence_and_load_baselines) do |email_normalized:|
+      raise LoopsService::ApiError.new(400, '{"message": "Invalid email address"}')
+    end
+
+    begin
+      base_time = Time.parse("2025-11-02T10:00:00Z")
+
+      # Create envelope that will fail during preflight check
+      envelope = LoopsOutboxEnvelope.create!(
+        email_normalized: @email_normalized,
+        payload: {
+          "field1" => {
+            "value" => "value1",
+            "strategy" => "upsert",
+            "modified_at" => base_time.iso8601
+          }
+        },
+        status: :queued,
+        provenance: build_test_provenance,
+        sync_source_id: @sync_source.id
+      )
+
+      initial_status = envelope.status
+      assert_equal "queued", initial_status, "Envelope should start as queued"
+
+      # Run the dispatch worker - should raise exception but mark envelope as failed
+      worker = LoopsDispatchWorker.new
+      assert_raises(LoopsService::ApiError) do
+        worker.perform
+      end
+
+      # Reload envelope and verify it was marked as failed
+      envelope.reload
+      assert_equal "failed", envelope.status, "Envelope MUST be marked as failed - this test will fail without the fix"
+
+      # Verify error details were stored with correct stage
+      assert_not_nil envelope.error, "Error details must be stored"
+      assert_equal "Invalid email address", envelope.error["message"], "Error message must match"
+      assert_equal "LoopsService::ApiError", envelope.error["class"], "Error class must be stored"
+      assert_equal "preflight_check", envelope.error["stage"], "Error stage MUST be 'preflight_check' - this verifies the specific rescue block works"
+      assert_not_nil envelope.error["occurred_at"], "Occurred_at timestamp must be stored"
+
+    ensure
+      # Restore original method
+      LoopsFieldBaseline.define_singleton_method(:check_contact_existence_and_load_baselines, original_method)
+    end
+  end
+
+  test "preflight check error handling: marks multiple envelopes as failed" do
+    # Mock LoopsFieldBaseline.check_contact_existence_and_load_baselines to raise ApiError
+    original_method = LoopsFieldBaseline.method(:check_contact_existence_and_load_baselines)
+    LoopsFieldBaseline.define_singleton_method(:check_contact_existence_and_load_baselines) do |email_normalized:|
+      raise LoopsService::ApiError.new(400, '{"message": "Invalid email address"}')
+    end
+
+    begin
+      base_time = Time.parse("2025-11-02T10:00:00Z")
+
+      # Create multiple envelopes for the same email that will fail during preflight check
+      envelope1 = LoopsOutboxEnvelope.create!(
+        email_normalized: @email_normalized,
+        payload: {
+          "field1" => {
+            "value" => "value1",
+            "strategy" => "upsert",
+            "modified_at" => base_time.iso8601
+          }
+        },
+        status: :queued,
+        provenance: build_test_provenance,
+        sync_source_id: @sync_source.id
+      )
+
+      envelope2 = LoopsOutboxEnvelope.create!(
+        email_normalized: @email_normalized,
+        payload: {
+          "field2" => {
+            "value" => "value2",
+            "strategy" => "upsert",
+            "modified_at" => base_time.iso8601
+          }
+        },
+        status: :queued,
+        provenance: build_test_provenance,
+        sync_source_id: @sync_source.id
+      )
+
+      # Run the dispatch worker - should raise exception but mark all envelopes as failed
+      worker = LoopsDispatchWorker.new
+      assert_raises(LoopsService::ApiError) do
+        worker.perform
+      end
+
+      # Reload envelopes and verify they were all marked as failed
+      envelope1.reload
+      envelope2.reload
+      assert_equal "failed", envelope1.status, "Envelope1 MUST be marked as failed"
+      assert_equal "failed", envelope2.status, "Envelope2 MUST be marked as failed"
+
+      # Verify error details were stored for both with correct stage
+      assert_not_nil envelope1.error, "Envelope1 error details must be stored"
+      assert_not_nil envelope2.error, "Envelope2 error details must be stored"
+      assert_equal "Invalid email address", envelope1.error["message"], "Envelope1 error message must match"
+      assert_equal "Invalid email address", envelope2.error["message"], "Envelope2 error message must match"
+      assert_equal "preflight_check", envelope1.error["stage"], "Envelope1 error stage MUST be 'preflight_check'"
+      assert_equal "preflight_check", envelope2.error["stage"], "Envelope2 error stage MUST be 'preflight_check'"
+
+    ensure
+      # Restore original method
+      LoopsFieldBaseline.define_singleton_method(:check_contact_existence_and_load_baselines, original_method)
+    end
+  end
+
+  test "preflight check error handling: uses update_columns for persistence" do
+    # This test verifies that update_columns is used (not update!) to bypass validations
+    # Mock LoopsFieldBaseline.check_contact_existence_and_load_baselines to raise ApiError
+    original_method = LoopsFieldBaseline.method(:check_contact_existence_and_load_baselines)
+    LoopsFieldBaseline.define_singleton_method(:check_contact_existence_and_load_baselines) do |email_normalized:|
+      raise LoopsService::ApiError.new(400, '{"message": "Invalid email address"}')
+    end
+
+    begin
+      base_time = Time.parse("2025-11-02T10:00:00Z")
+
+      # Create envelope that will fail during preflight check
+      envelope = LoopsOutboxEnvelope.create!(
+        email_normalized: @email_normalized,
+        payload: {
+          "field1" => {
+            "value" => "value1",
+            "strategy" => "upsert",
+            "modified_at" => base_time.iso8601
+          }
+        },
+        status: :queued,
+        provenance: build_test_provenance,
+        sync_source_id: @sync_source.id
+      )
+
+      # Track if update_columns was called (we can't easily spy on it, but we can verify
+      # that the update persists even if there are validation issues)
+      original_updated_at = envelope.updated_at
+
+      # Run the dispatch worker
+      worker = LoopsDispatchWorker.new
+      assert_raises(LoopsService::ApiError) do
+        worker.perform
+      end
+
+      # Reload envelope and verify it was marked as failed
+      envelope.reload
+      assert_equal "failed", envelope.status, "Envelope MUST be marked as failed"
+      
+      # Verify updated_at was changed (update_columns should update it)
+      assert envelope.updated_at > original_updated_at, "updated_at should be updated by update_columns"
+      
+      # Verify error details persist
+      assert_not_nil envelope.error, "Error details must persist"
+      assert_equal "preflight_check", envelope.error["stage"], "Error stage must be 'preflight_check'"
+
+    ensure
+      # Restore original method
+      LoopsFieldBaseline.define_singleton_method(:check_contact_existence_and_load_baselines, original_method)
+    end
+  end
+
+  test "preflight check error handling: transaction ensures persistence even if job fails" do
+    # This test verifies that the transaction ensures envelopes are marked as failed
+    # even if the job fails and Sidekiq retries
+    original_method = LoopsFieldBaseline.method(:check_contact_existence_and_load_baselines)
+    LoopsFieldBaseline.define_singleton_method(:check_contact_existence_and_load_baselines) do |email_normalized:|
+      raise LoopsService::ApiError.new(400, '{"message": "Invalid email address"}')
+    end
+
+    begin
+      base_time = Time.parse("2025-11-02T10:00:00Z")
+
+      envelope = LoopsOutboxEnvelope.create!(
+        email_normalized: @email_normalized,
+        payload: {
+          "field1" => {
+            "value" => "value1",
+            "strategy" => "upsert",
+            "modified_at" => base_time.iso8601
+          }
+        },
+        status: :queued,
+        provenance: build_test_provenance,
+        sync_source_id: @sync_source.id
+      )
+
+      # Run the dispatch worker
+      worker = LoopsDispatchWorker.new
+      assert_raises(LoopsService::ApiError) do
+        worker.perform
+      end
+
+      # Simulate what happens if Sidekiq retries: verify envelope is still marked as failed
+      # even after the exception is raised
+      envelope.reload
+      assert_equal "failed", envelope.status, "Envelope MUST remain marked as failed after exception"
+      
+      # Verify error details persist
+      assert_not_nil envelope.error, "Error details must persist after exception"
+      assert_equal "preflight_check", envelope.error["stage"], "Error stage must persist"
+
+      # Verify that running the worker again doesn't try to process the failed envelope
+      # (it should be skipped since it's no longer queued)
+      processed_count = worker.perform
+      envelope.reload
+      assert_equal "failed", envelope.status, "Envelope should remain failed and not be reprocessed"
+
+    ensure
+      # Restore original method
+      LoopsFieldBaseline.define_singleton_method(:check_contact_existence_and_load_baselines, original_method)
+    end
+  end
+
   private
 
   def build_test_provenance
