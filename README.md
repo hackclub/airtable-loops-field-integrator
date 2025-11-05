@@ -7,7 +7,6 @@ Currently supported:
   - `Loops - highwaySignedUpAt` will upsert the Airtable value for the row into Loops (if the Airtable field is null, it will not overwrite the Loops value)
   - `Loops - Override - highwaySignedUpAt` will copy the Airtable value for the row into Loops, overwriting any existing value in Loops
 
-
 To-Do:
 
 - AI fields
