@@ -170,6 +170,7 @@
 <div class="nav">
   <%= link_to "Email Audit Logs", emails_path, class: (request.path == emails_path ? "active" : "") %>
   <%= link_to "Sync Sources", sync_sources_path, class: (request.path.start_with?("/sync_sources") ? "active" : "") %>
+  <%= link_to "Sidekiq", "/sidekiq", class: (request.path.start_with?("/sidekiq") ? "active" : "") %>
 </div>
 
 <%= link_to "← Back", emails_path, class: "back-link" %>
