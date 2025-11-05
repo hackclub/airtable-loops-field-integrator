@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Generate a prompt.txt file containing the entire codebase using code2prompt
+# Excludes prompt.txt itself from the output
+
+set -euo pipefail
+
+APP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$APP_ROOT"
+
+# Run code2prompt, excluding prompt.txt from the output
+code2prompt . prompt.txt \
+  --exclude "prompt.txt" \
+  --quiet
+
+echo "✓ Generated prompt.txt"
+
