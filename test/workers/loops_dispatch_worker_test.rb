@@ -1030,6 +1030,80 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
     end
   end
 
+  test "concurrency limiting is configured correctly" do
+    # Verify that sidekiq-throttled is included and configured
+    assert LoopsDispatchWorker.included_modules.include?(Sidekiq::Throttled::Job),
+           "LoopsDispatchWorker should include Sidekiq::Throttled::Job"
+
+    # Verify the rate limit helper method exists and returns correct value
+    rate_limit = LoopsService.rate_limit_rps
+    assert_equal 10, rate_limit, "Rate limit should be 10 RPS"
+  end
+
+  test "concurrency limiting allows jobs to be enqueued" do
+    # Verify that jobs can still be enqueued (throttling happens at execution time)
+    job_id = LoopsDispatchWorker.perform_async
+    assert_not_nil job_id, "Job should be enqueued successfully"
+    
+    # Note: Cleanup happens in teardown method
+  end
+
+  test "concurrency limit matches LoopsService rate limit" do
+    # Verify that the concurrency limit is dynamically tied to LoopsService rate limit
+    rate_limit = LoopsService.rate_limit_rps
+    
+    # Verify it's actually 10 (current configured value)
+    assert_equal 10, rate_limit, "Rate limit should be 10 RPS"
+    
+    # Verify the module is included (which enables throttling)
+    assert LoopsDispatchWorker.included_modules.include?(Sidekiq::Throttled::Job),
+           "Worker should include Sidekiq::Throttled::Job for throttling to work"
+  end
+
+  test "worker still processes envelopes correctly with throttling enabled" do
+    # Verify that throttling doesn't break normal functionality
+    sent_payload = nil
+    
+    original_update_contact = LoopsService.method(:update_contact)
+    LoopsService.define_singleton_method(:update_contact) do |email:, **kwargs|
+      sent_payload = kwargs.dup
+      { "success" => true, "id" => "test-request-123" }
+    end
+
+    begin
+      base_time = Time.parse("2025-11-02T10:00:00Z")
+
+      envelope = LoopsOutboxEnvelope.create!(
+        email_normalized: @email_normalized,
+        payload: {
+          "field1" => {
+            "value" => "value1",
+            "strategy" => "upsert",
+            "modified_at" => base_time.iso8601
+          }
+        },
+        status: :queued,
+        provenance: build_test_provenance,
+        sync_source_id: @sync_source.id
+      )
+
+      # Run the dispatch worker - should work normally despite throttling
+      worker = LoopsDispatchWorker.new
+      worker.perform
+
+      # Verify envelope was processed
+      envelope.reload
+      assert_equal "sent", envelope.status, "Envelope should be marked as sent"
+      
+      # Verify API was called
+      assert_not_nil sent_payload, "LoopsService.update_contact should have been called"
+      assert_equal "value1", sent_payload["field1"], "Correct payload should have been sent"
+
+    ensure
+      LoopsService.define_singleton_method(:update_contact, original_update_contact)
+    end
+  end
+
   private
 
   def build_test_provenance

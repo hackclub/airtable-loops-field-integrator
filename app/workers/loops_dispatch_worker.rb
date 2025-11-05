@@ -4,8 +4,16 @@ require_relative "../lib/email_normalizer"
 
 class LoopsDispatchWorker
   include Sidekiq::Worker
+  include Sidekiq::Throttled::Job
 
   sidekiq_options queue: :default
+
+  # Limit concurrent jobs to match Loops API rate limit
+  # This prevents all worker threads from being consumed by this worker
+  # The limit matches LoopsService.rate_limit_rps (10 RPS)
+  sidekiq_throttle(
+    concurrency: { limit: LoopsService.rate_limit_rps }
+  )
 
   # Advisory lock namespace for per-email locking (same as PrepareLoopsFieldsForOutboxJob)
   ADVISORY_LOCK_NAMESPACE = 0x504C4600  # ASCII: "PLF" (PrepareLoopsFields)

@@ -260,6 +260,7 @@ GEM
       redis-client (>= 0.22.0)
     redis-client (0.26.1)
       connection_pool
+    redis-prescription (2.6.0)
     regexp_parser (2.11.3)
     reline (0.6.2)
       io-console (~> 0.5)
@@ -323,6 +324,10 @@ GEM
     sidekiq-scheduler (6.0.1)
       rufus-scheduler (~> 3.2)
       sidekiq (>= 7.3, < 9)
+    sidekiq-throttled (1.5.2)
+      concurrent-ruby (>= 1.2.0)
+      redis-prescription (~> 2.2)
+      sidekiq (>= 6.5)
     sshkit (1.24.0)
       base64
       logger
@@ -383,6 +388,7 @@ DEPENDENCIES
   selenium-webdriver
   sidekiq (~> 7.3)
   sidekiq-scheduler
+  sidekiq-throttled
   stimulus-rails
   thruster
   turbo-rails

@@ -18,6 +18,11 @@ class LoopsService
     )
   end
 
+  # Get the configured rate limit (requests per second)
+  def self.rate_limit_rps
+    global_rate_limiter.instance_variable_get(:@limit)
+  end
+
   class RateLimitError < StandardError
     def initialize(message = "Rate limit exceeded")
       super(message)
