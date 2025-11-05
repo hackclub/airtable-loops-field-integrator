@@ -144,6 +144,23 @@
     color: #666;
     font-style: italic;
   }
+  .loops-button {
+    display: inline-block;
+    margin-left: 12px;
+    padding: 6px 12px;
+    background-color: #007bff;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+  }
+  .loops-button:hover {
+    background-color: #0056b3;
+    color: white;
+    text-decoration: none;
+  }
 </style>
 
 <script>
@@ -176,7 +193,23 @@
 <%= link_to "← Back", emails_path, class: "back-link" %>
 
 <h1>Audit Log</h1>
-<div class="email"><%= @email %></div>
+<div class="email">
+  <%= @email %>
+  <% 
+    # Build Loops URL with email filter
+    filter = {
+      "AND" => [
+        {
+          "key" => "email",
+          "operation" => "contains",
+          "value" => @email
+        }
+      ]
+    }.to_json
+    loops_url = "https://app.loops.so/audience?pageSize=20&page=0&sortAudienceBy=createdAt&sortAudienceOrder=desc&columnPinning=email&audienceFilter=#{ERB::Util.url_encode(filter)}"
+  %>
+  <%= link_to "View in Loops", loops_url, target: "_blank", class: "loops-button" %>
+</div>
 
 <% if @bucketed_audits&.any? %>
   <h2>Changes</h2>
