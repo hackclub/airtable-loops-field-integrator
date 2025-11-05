@@ -1,6 +1,7 @@
 module Pollers
   class AirtableToLoops
     require_relative "../../lib/email_normalizer"
+    require_relative "../../lib/value_normalizer"
 
     DISPLAY_NAME_UPDATE_INTERVAL = 24.hours
 
@@ -245,7 +246,8 @@ module Pollers
           field_id_key = field_identifier(field_id, field_name)
 
           # Get current value from record_fields (nil if not present, meaning field is null/empty)
-          current_value = record_fields[field_name]
+          current_value_raw = record_fields[field_name]
+          current_value = ValueNormalizer.from_airtable(current_value_raw)
 
           result = FieldValueBaseline.detect_change(
             sync_source: sync_source,

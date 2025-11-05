@@ -324,5 +324,81 @@ module Pollers
       assert baseline_field_ids.none? { |id| id.include?("number_of_referrals") },
         "Should NOT have baseline for number_of_referrals"
     end
+
+    test "normalizes single-element arrays from Airtable to scalar values" do
+      # Test that when Airtable returns ["test"], it's normalized to "test" downstream
+      table = {
+        "fields" => [
+          { "id" => "fldEmail", "name" => "email" },
+          { "id" => "fldLoops1", "name" => "Loops - firstName" }
+        ]
+      }
+
+      email_field = { "id" => "fldEmail", "name" => "email" }
+      loops_fields = { "fldLoops1" => { "id" => "fldLoops1", "name" => "Loops - firstName" } }
+
+      # Record with array value (simulating Airtable lookup/rollup returning ["test"])
+      records = [
+        {
+          "id" => "rec123",
+          "fields" => {
+            "email" => "test@example.com",
+            "Loops - firstName" => ["test"] # Array value from Airtable
+          }
+        }
+      ]
+
+      poller = Pollers::AirtableToLoops.new
+
+      # Call detect_changes
+      changed_records = poller.send(
+        :detect_changes,
+        @sync_source,
+        "base123",
+        "tbl123",
+        records,
+        table,
+        email_field,
+        loops_fields
+      )
+
+      # Verify change was detected
+      assert_equal 1, changed_records.size, "Should detect change"
+      assert_equal 1, changed_records.first[:changedValues].size, "Should have one changed field"
+
+      # Verify the value in changed_values is normalized to "test" (not ["test"])
+      changed_value_data = changed_records.first[:changedValues].values.first
+      assert_equal "test", changed_value_data["value"], "Value should be normalized from array to string"
+      assert_not_equal ["test"], changed_value_data["value"], "Value should not be an array"
+
+      # Verify baseline stores normalized value
+      baseline = FieldValueBaseline.where(sync_source: @sync_source).first
+      assert_not_nil baseline, "Baseline should be created"
+      assert_equal "test", baseline.last_known_value, "Baseline should store normalized value"
+
+      # Verify that if we pass the same normalized value again, it doesn't detect a change
+      records2 = [
+        {
+          "id" => "rec123",
+          "fields" => {
+            "email" => "test@example.com",
+            "Loops - firstName" => "test" # Normalized value
+          }
+        }
+      ]
+
+      changed_records2 = poller.send(
+        :detect_changes,
+        @sync_source,
+        "base123",
+        "tbl123",
+        records2,
+        table,
+        email_field,
+        loops_fields
+      )
+
+      assert_equal 0, changed_records2.size, "Should not detect change when normalized value matches"
+    end
   end
 end
