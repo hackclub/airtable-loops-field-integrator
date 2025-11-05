@@ -54,45 +54,57 @@ module Pollers
       log_info("Found email field: #{email_field['name']}")
       log_info("Found #{loops_fields.size} Loops field(s): #{loops_fields.values.map { |f| f['name'] }.join(', ')}")
 
-      # Load previously known Loops field IDs from metadata
       metadata = sync_source.metadata || {}
       known_loops_fields = metadata["known_loops_fields"] || {}
-      previously_known_field_ids = known_loops_fields[table_id] || []
+      previously_known_field_map = known_loops_fields[table_id] || {}
 
-      # Get current Loops field IDs in format "field_id/field_name"
-      current_field_ids = loops_fields.map { |field_id, field| field_identifier(field_id, field["name"]) }
+      unless previously_known_field_map.is_a?(Hash)
+        previously_known_field_map = {}
+      end
 
-      # Detect if any new Loops fields have been added
+      current_field_map = loops_fields.map do |field_id, field|
+        [field_identifier(field_id, field["name"]), field["type"] || "unknown"]
+      end.to_h
+
+      current_field_ids = current_field_map.keys
+      previously_known_field_ids = previously_known_field_map.keys
+
       has_new_loops_fields = (current_field_ids - previously_known_field_ids).any?
+      has_changed_field_types = current_field_ids.any? do |field_id|
+        previously_known_field_map.key?(field_id) &&
+          previously_known_field_map[field_id] != current_field_map[field_id]
+      end
+
+      needs_full_resync = has_new_loops_fields || has_changed_field_types
 
       if has_new_loops_fields
         new_field_ids = current_field_ids - previously_known_field_ids
         log_info("New Loops field(s) detected: #{new_field_ids.join(', ')} - fetching ALL records for this table")
       end
 
-      # Build filter formula (skip time filter if new Loops fields detected)
-      filter_formula = build_filter_formula(sync_source, email_field, skip_time_filter: has_new_loops_fields)
+      if has_changed_field_types
+        changed_fields = current_field_ids.select do |field_id|
+          previously_known_field_map.key?(field_id) &&
+            previously_known_field_map[field_id] != current_field_map[field_id]
+        end
+        log_info("Field type change(s) detected for: #{changed_fields.join(', ')} - fetching ALL records for this table")
+      end
 
-      # Fetch records (fetch all if new Loops fields detected)
-      records = fetch_records(base_id, table_id, filter_formula, email_field: email_field, fetch_all: has_new_loops_fields)
+      filter_formula = build_filter_formula(sync_source, email_field, skip_time_filter: needs_full_resync)
+      records = fetch_records(base_id, table_id, filter_formula, email_field: email_field, fetch_all: needs_full_resync)
 
       if records.empty?
         log_info("No records to process")
-        # Still update metadata even if no records
-        update_known_loops_fields(sync_source, table_id, current_field_ids)
+        update_known_loops_fields(sync_source, table_id, current_field_map)
         return
       end
 
       log_info("Processing #{records.size} record(s) for change detection")
 
-      # Detect changed values - only create baselines for Loops fields
       changed_records = detect_changes(sync_source, base_id, table_id, records, table, email_field, loops_fields)
-
-      # Process changed records
       process_changed_records(sync_source.id, table_id, changed_records, loops_fields)
 
-      # Update metadata with current Loops field IDs after processing
-      update_known_loops_fields(sync_source, table_id, current_field_ids)
+      update_known_loops_fields(sync_source, table_id, current_field_map)
     end
 
     def find_email_field(table)
@@ -346,11 +358,10 @@ module Pollers
       end
     end
 
-    def update_known_loops_fields(sync_source, table_id, current_field_ids)
-      # Update metadata to store current Loops field IDs for this table
+    def update_known_loops_fields(sync_source, table_id, current_field_map)
       metadata = sync_source.metadata || {}
       metadata["known_loops_fields"] ||= {}
-      metadata["known_loops_fields"][table_id] = current_field_ids
+      metadata["known_loops_fields"][table_id] = current_field_map
       sync_source.update_columns(metadata: metadata)
     end
 

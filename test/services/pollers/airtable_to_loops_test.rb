@@ -1,4 +1,5 @@
 require "test_helper"
+require "minitest/mock"
 
 module Pollers
   class AirtableToLoopsTest < ActiveSupport::TestCase
@@ -399,6 +400,155 @@ module Pollers
       )
 
       assert_equal 0, changed_records2.size, "Should not detect change when normalized value matches"
+    end
+
+    test "triggers full resync when field type changes" do
+      table_id = "tbl123"
+      base_id = "base123"
+
+      # Mock table with Loops field
+      table = {
+        "id" => table_id,
+        "name" => "Test Table",
+        "fields" => [
+          { "id" => "fldEmail", "name" => "email", "type" => "email" },
+          { "id" => "fldLoops1", "name" => "Loops - firstName", "type" => "multilineText" }
+        ]
+      }
+
+      email_field = { "id" => "fldEmail", "name" => "email", "type" => "email" }
+
+      # Store initial field type (different from current)
+      @sync_source.update_columns(metadata: {
+        "known_loops_fields" => {
+          table_id => {
+            "fldLoops1/Loops - firstName" => "singleLineText"
+          }
+        }
+      })
+
+      poller = Pollers::AirtableToLoops.new
+
+      # Mock fetch_records to track if fetch_all was called
+      fetch_all_called = false
+      poller.stub :fetch_records, ->(*args, **kwargs) {
+        fetch_all_called = kwargs[:fetch_all] || false
+        []
+      } do
+        poller.send(:process_table, @sync_source, base_id, table_id, table)
+      end
+
+      # Should trigger full resync (fetch_all should be true)
+      assert fetch_all_called, "Should trigger full resync when field type changes"
+    end
+
+    test "triggers full resync when new field is added" do
+      table_id = "tbl123"
+      base_id = "base123"
+
+      # Mock table with one Loops field
+      table = {
+        "id" => table_id,
+        "name" => "Test Table",
+        "fields" => [
+          { "id" => "fldEmail", "name" => "email", "type" => "email" },
+          { "id" => "fldLoops1", "name" => "Loops - firstName", "type" => "singleLineText" }
+        ]
+      }
+
+      email_field = { "id" => "fldEmail", "name" => "email", "type" => "email" }
+
+      # No existing metadata (no fields tracked yet)
+      @sync_source.update_columns(metadata: {})
+
+      poller = Pollers::AirtableToLoops.new
+
+      # Mock fetch_records to track if fetch_all was called
+      fetch_all_called = false
+      poller.stub :fetch_records, ->(*args, **kwargs) {
+        fetch_all_called = kwargs[:fetch_all] || false
+        []
+      } do
+        poller.send(:process_table, @sync_source, base_id, table_id, table)
+      end
+
+      # Should trigger full resync for new field
+      assert fetch_all_called, "Should trigger full resync when new field is added"
+    end
+
+    test "stores field types in metadata" do
+      table_id = "tbl123"
+      base_id = "base123"
+
+      # Mock table with Loops fields
+      table = {
+        "id" => table_id,
+        "name" => "Test Table",
+        "fields" => [
+          { "id" => "fldEmail", "name" => "email", "type" => "email" },
+          { "id" => "fldLoops1", "name" => "Loops - firstName", "type" => "singleLineText" },
+          { "id" => "fldLoops2", "name" => "Loops - lastName", "type" => "email" }
+        ]
+      }
+
+      email_field = { "id" => "fldEmail", "name" => "email", "type" => "email" }
+
+      @sync_source.update_columns(metadata: {})
+
+      poller = Pollers::AirtableToLoops.new
+      poller.stub :fetch_records, [] do
+        poller.send(:process_table, @sync_source, base_id, table_id, table)
+      end
+
+      # Reload sync_source to get updated metadata
+      @sync_source.reload
+      metadata = @sync_source.metadata
+      known_fields = metadata["known_loops_fields"][table_id]
+
+      # Should be a hash mapping field identifiers to types
+      assert_instance_of Hash, known_fields, "Metadata should store field map as hash"
+      assert_equal "singleLineText", known_fields["fldLoops1/Loops - firstName"], "Should store firstName field type"
+      assert_equal "email", known_fields["fldLoops2/Loops - lastName"], "Should store lastName field type"
+    end
+
+    test "does not trigger full resync when field types remain the same" do
+      table_id = "tbl123"
+      base_id = "base123"
+
+      # Mock table with Loops field
+      table = {
+        "id" => table_id,
+        "name" => "Test Table",
+        "fields" => [
+          { "id" => "fldEmail", "name" => "email", "type" => "email" },
+          { "id" => "fldLoops1", "name" => "Loops - firstName", "type" => "singleLineText" }
+        ]
+      }
+
+      email_field = { "id" => "fldEmail", "name" => "email", "type" => "email" }
+
+      # Existing metadata with same field type
+      @sync_source.update_columns(metadata: {
+        "known_loops_fields" => {
+          table_id => {
+            "fldLoops1/Loops - firstName" => "singleLineText"
+          }
+        }
+      })
+
+      poller = Pollers::AirtableToLoops.new
+
+      # Mock fetch_records to track if fetch_all was called
+      fetch_all_called = false
+      poller.stub :fetch_records, ->(*args, **kwargs) {
+        fetch_all_called = kwargs[:fetch_all] || false
+        []
+      } do
+        poller.send(:process_table, @sync_source, base_id, table_id, table)
+      end
+
+      # Should NOT trigger full resync when types are the same
+      assert_not fetch_all_called, "Should not trigger full resync when field types remain the same"
     end
   end
 end
