@@ -34,9 +34,9 @@ module Pollers
       loops_fields = {}
       table["fields"].each do |field|
         field_name = field["name"] || ""
-        loops_pattern = /\ALoops\s*-\s*(Override\s*-\s*)?[a-z][a-zA-Z0-9]*\z/i
+        loops_pattern = /\ALoops\s*-\s*(Override\s*-\s*|Special\s*-\s*)?[a-z][a-zA-Z0-9]*\z/i
         if field_name.strip.match?(loops_pattern)
-          field_name_without_prefix = field_name.sub(/\ALoops\s*-\s*(Override\s*-\s*)?/i, "")
+          field_name_without_prefix = field_name.sub(/\ALoops\s*-\s*(Override\s*-\s*|Special\s*-\s*)?/i, "")
           if field_name_without_prefix =~ /\A[a-z]/
             loops_fields[field["id"]] = field
           end
@@ -95,6 +95,32 @@ module Pollers
         "Should NOT have baseline for referral_target"
       assert baseline_field_ids.none? { |id| id.include?("inbound_referrals") },
         "Should NOT have baseline for inbound_referrals"
+    end
+
+    test "find_loops_fields detects Special fields" do
+      table = {
+        "fields" => [
+          { "id" => "fldEmail", "name" => "email" },
+          { "id" => "fldLoops1", "name" => "Loops - tmpZachLoopsApiTest" },
+          { "id" => "fldLoops2", "name" => "Loops - Override - tmpZachLoopsApiTest2" },
+          { "id" => "fldSpecial1", "name" => "Loops - Special - setFullName" },
+          { "id" => "fldSpecial2", "name" => "Loops - Special - setFullAddress" },
+          { "id" => "fldNonLoops1", "name" => "Loops - Lists" }, # Should NOT match (uppercase)
+          { "id" => "fldNonLoops2", "name" => "Loop - Special - setFullAddress" } # Typo - should NOT match
+        ]
+      }
+
+      poller = Pollers::AirtableToLoops.new
+      loops_fields = poller.send(:find_loops_fields, table)
+
+      # Should find 4 Loops fields
+      assert_equal 4, loops_fields.size, "Should find 4 Loops fields"
+      assert loops_fields.key?("fldLoops1"), "Should include regular Loops field"
+      assert loops_fields.key?("fldLoops2"), "Should include Override Loops field"
+      assert loops_fields.key?("fldSpecial1"), "Should include Special - setFullName"
+      assert loops_fields.key?("fldSpecial2"), "Should include Special - setFullAddress"
+      assert_not loops_fields.key?("fldNonLoops1"), "Should NOT include Loops - Lists (uppercase)"
+      assert_not loops_fields.key?("fldNonLoops2"), "Should NOT include typo 'Loop - Special'"
     end
 
     test "detect_changes correctly identifies changed Loops fields" do

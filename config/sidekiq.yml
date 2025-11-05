@@ -22,6 +22,10 @@ queues:
     every: ["1d"]
     class: "PruneLoopsOutboxWorker"
     queue: default
+  prune_llm_cache:
+    every: ["1d"]
+    class: "PruneLlmCacheWorker"
+    queue: default
 
 production:
   concurrency: 10

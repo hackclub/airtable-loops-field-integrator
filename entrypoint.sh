@@ -34,6 +34,12 @@ until nc -z "$REDIS_HOST" "$REDIS_PORT" 2>/dev/null; do
 done
 echo "Redis is up - continuing"
 
+# Ensure gems are installed (useful when volumes are mounted)
+if [ -f /app/Gemfile ]; then
+  echo "Checking bundle..."
+  bundle check || bundle install
+fi
+
 # Optionally run database setup/migrations on boot (only when enabled)
 if [ "${RUN_MIGRATIONS_ON_BOOT}" = "1" ] || [ "${RUN_MIGRATIONS_ON_BOOT}" = "true" ]; then
   echo "Running rails db:prepare..."

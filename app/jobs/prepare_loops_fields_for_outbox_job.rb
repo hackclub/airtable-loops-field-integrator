@@ -1,4 +1,5 @@
 require_relative "../lib/email_normalizer"
+# Rails autoloads classes in app/ directories, so no need for explicit requires
 
 class PrepareLoopsFieldsForOutboxJob
   include Sidekiq::Worker
@@ -65,15 +66,81 @@ class PrepareLoopsFieldsForOutboxJob
       # Skip if not a Loops field (must start with "Loops - " or "Loops - Override - ")
       next unless field_name =~ /\ALoops\s*-\s*/i
 
+      # Extract field_id from key
+      field_id = field_key.split("/", 2).first
+
+      # Check if this is a special AI field
+      special_match = field_name.match(/\ALoops\s*-\s*Special\s*-\s*(setFullName|setFullAddress)\z/i)
+
+      if special_match
+        # Handle special AI fields
+        special_field_type = special_match[1]
+        value = field_data["value"]
+        old_value = field_data["old_value"]
+        modified_at = field_data["modified_at"] || Time.current.iso8601
+
+        next if value.blank?
+
+        # Call appropriate processor based on field type
+        extracted_data = case special_field_type
+        when /setFullName/i
+          AiProcessors::ExtractFullName.call(raw_input: value.to_s)
+        when /setFullAddress/i
+          AiProcessors::ExtractFullAddress.call(raw_input: value.to_s)
+        else
+          {}
+        end
+
+        # Convert extracted data to envelope format
+        extracted_data.each do |loops_field, field_value|
+          # Use override strategy for setFullAddress, upsert for setFullName
+          strategy = (special_field_type =~ /setFullAddress/i) ? :override : :upsert
+          
+          envelope[loops_field] = {
+            value: field_value,
+            strategy: strategy,
+            modified_at: modified_at
+          }
+
+          # Add provenance
+          provenance_fields << {
+            sync_source_field_id: field_id,
+            sync_source_field_name: field_name,
+            former_sync_source_value: old_value,
+            new_sync_source_value: value,
+            modified_at: modified_at,
+            derived_to_loops_field: loops_field
+          }
+        end
+
+        # For addresses, also set addressLastUpdatedAt with override strategy
+        if special_field_type =~ /setFullAddress/i && extracted_data.any?
+          now = Time.current.iso8601
+          envelope["addressLastUpdatedAt"] = {
+            value: now,
+            strategy: :override,
+            modified_at: now
+          }
+
+          provenance_fields << {
+            sync_source_field_id: field_id,
+            sync_source_field_name: field_name,
+            former_sync_source_value: old_value,
+            new_sync_source_value: value,
+            modified_at: now,
+            derived_to_loops_field: "addressLastUpdatedAt"
+          }
+        end
+
+        next
+      end
+
       # Extract field name without prefix to check if it's lowerCamelCase
       field_name_without_prefix = field_name.sub(/\ALoops\s*-\s*(Override\s*-\s*)?/i, "")
 
       # Skip if field name doesn't start with lowercase (not lowerCamelCase)
       # This prevents matching fields like "Loops - Lists" which starts with uppercase
       next unless field_name_without_prefix =~ /\A[a-z]/
-
-      # Extract field_id from key
-      field_id = field_key.split("/", 2).first
 
       # Map field name and determine strategy
       loops_field_name, strategy = map_field_name_and_strategy(field_name)

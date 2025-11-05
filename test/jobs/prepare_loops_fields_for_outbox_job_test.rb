@@ -1,4 +1,5 @@
 require "test_helper"
+require "minitest/mock"
 
 class PrepareLoopsFieldsForOutboxJobTest < ActiveJob::TestCase
   # Disable parallelization for this test class since we're testing database interactions
@@ -296,5 +297,126 @@ class PrepareLoopsFieldsForOutboxJobTest < ActiveJob::TestCase
 
     # Should only have one field in payload
     assert_equal 1, envelope.payload.keys.size, "Should only process one field"
+  end
+
+  test "processes Loops - Special - setFullName field" do
+    mock_extracted = {
+      "firstName" => "John",
+      "lastName" => "Doe"
+    }
+
+    AiProcessors::ExtractFullName.stub(:call, ->(**args) { mock_extracted }) do
+      changed_fields = {
+        "fldSpecial123/Loops - Special - setFullName" => {
+          "value" => "John Doe",
+          "old_value" => nil,
+          "modified_at" => Time.current.iso8601
+        }
+      }
+
+      PrepareLoopsFieldsForOutboxJob.new.perform(
+        @email,
+        @sync_source.id,
+        @table_id,
+        @record_id,
+        changed_fields
+      )
+
+      envelope = LoopsOutboxEnvelope.last
+      assert_not_nil envelope, "Envelope should be created"
+
+      # Check extracted fields are in payload
+      assert envelope.payload.key?("firstName"), "Payload should contain firstName"
+      assert envelope.payload.key?("lastName"), "Payload should contain lastName"
+
+      assert_equal "John", envelope.payload["firstName"]["value"]
+      assert_equal "Doe", envelope.payload["lastName"]["value"]
+      assert_equal "upsert", envelope.payload["firstName"]["strategy"]
+      assert_equal "upsert", envelope.payload["lastName"]["strategy"]
+
+      # Check provenance includes derived_to_loops_field
+      field_provenances = envelope.provenance["fields"]
+      assert field_provenances.any? { |p| p["derived_to_loops_field"] == "firstName" }
+      assert field_provenances.any? { |p| p["derived_to_loops_field"] == "lastName" }
+    end
+  end
+
+  test "processes Loops - Special - setFullAddress field" do
+    mock_extracted = {
+      "addressLine1" => "123 Main St",
+      "addressLine2" => "Apt 4B",
+      "addressCity" => "Springfield",
+      "addressState" => "IL",
+      "addressZipCode" => "62704",
+      "addressCountry" => "US"
+    }
+
+    AiProcessors::ExtractFullAddress.stub(:call, ->(**args) { mock_extracted }) do
+      changed_fields = {
+        "fldSpecial456/Loops - Special - setFullAddress" => {
+          "value" => "123 Main St, Apt 4B, Springfield, IL 62704",
+          "old_value" => nil,
+          "modified_at" => Time.current.iso8601
+        }
+      }
+
+      PrepareLoopsFieldsForOutboxJob.new.perform(
+        @email,
+        @sync_source.id,
+        @table_id,
+        @record_id,
+        changed_fields
+      )
+
+      envelope = LoopsOutboxEnvelope.last
+      assert_not_nil envelope, "Envelope should be created"
+
+      # Check all address fields are in payload
+      assert envelope.payload.key?("addressLine1"), "Payload should contain addressLine1"
+      assert envelope.payload.key?("addressCity"), "Payload should contain addressCity"
+      assert envelope.payload.key?("addressState"), "Payload should contain addressState"
+      assert envelope.payload.key?("addressZipCode"), "Payload should contain addressZipCode"
+      assert envelope.payload.key?("addressCountry"), "Payload should contain addressCountry"
+      assert envelope.payload.key?("addressLastUpdatedAt"), "Payload should contain addressLastUpdatedAt"
+
+      assert_equal "123 Main St", envelope.payload["addressLine1"]["value"]
+      assert_equal "Springfield", envelope.payload["addressCity"]["value"]
+      assert_equal "IL", envelope.payload["addressState"]["value"]
+
+      # Check address fields use override strategy
+      assert_equal "override", envelope.payload["addressLine1"]["strategy"]
+      assert_equal "override", envelope.payload["addressCity"]["strategy"]
+
+      # Check addressLastUpdatedAt is set with override strategy
+      assert_not_nil envelope.payload["addressLastUpdatedAt"]["value"]
+      assert_equal "override", envelope.payload["addressLastUpdatedAt"]["strategy"]
+
+      # Check provenance includes derived_to_loops_field for all fields
+      field_provenances = envelope.provenance["fields"]
+      assert field_provenances.any? { |p| p["derived_to_loops_field"] == "addressLine1" }
+      assert field_provenances.any? { |p| p["derived_to_loops_field"] == "addressLastUpdatedAt" }
+    end
+  end
+
+  test "skips special fields with blank values" do
+    changed_fields = {
+      "fldSpecial123/Loops - Special - setFullName" => {
+        "value" => "",
+        "old_value" => nil,
+        "modified_at" => Time.current.iso8601
+      }
+    }
+
+    PrepareLoopsFieldsForOutboxJob.new.perform(
+      @email,
+      @sync_source.id,
+      @table_id,
+      @record_id,
+      changed_fields
+    )
+
+    envelope = LoopsOutboxEnvelope.last
+    # No envelope should be created when special field value is blank
+    assert_nil envelope, "No envelope should be created when special field value is blank"
   end
 end

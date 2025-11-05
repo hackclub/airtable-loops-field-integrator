@@ -33,6 +33,9 @@ gem "sidekiq-scheduler" # seconds-level schedules like every 15s
 # HTTP client for API requests
 gem "httpx", "~> 1.0"
 
+# RubyLLM for AI processing with structured output
+gem "ruby_llm"
+
 # Reduces boot times through caching; required in config/boot.rb
 gem "bootsnap", require: false
 

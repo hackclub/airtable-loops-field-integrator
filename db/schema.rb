@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_11_03_191033) do
+ActiveRecord::Schema[8.0].define(version: 2025_11_05_151159) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -33,6 +33,18 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_03_191033) do
     t.index ["sync_source_id", "row_id", "field_id"], name: "index_field_value_baselines_on_sync_source_row_field", unique: true
     t.index ["sync_source_id"], name: "index_field_value_baselines_on_sync_source_id"
     t.index ["value_last_updated_at"], name: "index_field_value_baselines_on_value_last_updated_at"
+  end
+
+  create_table "llm_caches", force: :cascade do |t|
+    t.string "prompt_hash", null: false
+    t.jsonb "request_json", null: false
+    t.jsonb "response_json", null: false
+    t.integer "bytes_size", null: false
+    t.datetime "last_used_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["last_used_at"], name: "index_llm_caches_on_last_used_at"
+    t.index ["prompt_hash"], name: "index_llm_caches_on_cache_key", unique: true
   end
 
   create_table "loops_contact_change_audits", force: :cascade do |t|

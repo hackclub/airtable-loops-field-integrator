@@ -106,11 +106,14 @@ module Pollers
     def find_loops_fields(table)
       return {} unless table["fields"]
 
-      # Match fields starting with "Loops - " or "Loops - Override - "
+      # Match fields starting with "Loops - ", "Loops - Override - ", or "Loops - Special - "
       # Field name must be lowerCamelCase (starts with lowercase letter)
-      # Examples: "Loops - tmpZachLoopsApiTest", "Loops - Override - tmpZachLoopsApiTest2"
+      # Examples:
+      #   - "Loops - tmpZachLoopsApiTest" (regular)
+      #   - "Loops - Override - tmpZachLoopsApiTest2" (override)
+      #   - "Loops - Special - setFullName" (special AI field)
       # Does NOT match: "Loops - Lists" (starts with uppercase)
-      loops_pattern = /\ALoops\s*-\s*(Override\s*-\s*)?[a-z][a-zA-Z0-9]*\z/i
+      loops_pattern = /\ALoops\s*-\s*(Override\s*-\s*|Special\s*-\s*)?[a-z][a-zA-Z0-9]*\z/i
 
       loops_fields = {}
       table["fields"].each do |field|
@@ -118,7 +121,7 @@ module Pollers
         # Check case-insensitively for "Loops" prefix, but field name must start lowercase
         if field_name.strip.match?(loops_pattern)
           # Double-check: after removing prefix, first char must be lowercase
-          field_name_without_prefix = field_name.sub(/\ALoops\s*-\s*(Override\s*-\s*)?/i, "")
+          field_name_without_prefix = field_name.sub(/\ALoops\s*-\s*(Override\s*-\s*|Special\s*-\s*)?/i, "")
           if field_name_without_prefix =~ /\A[a-z]/
             loops_fields[field["id"]] = field
           end
