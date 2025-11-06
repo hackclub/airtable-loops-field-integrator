@@ -15,25 +15,10 @@ class LlmCache < ApplicationRecord
     ENV.fetch("LLM_CACHE_MAX_MB", DEFAULT_MAX_CACHE_MB).to_i
   end
 
-  # Calculate bytes size from jsonb columns
-  def calculate_bytes_size
-    request_size = ActiveRecord::Base.connection.execute(
-      "SELECT pg_column_size(request_json) as size FROM llm_caches WHERE id = #{id}"
-    ).first["size"]
-
-    response_size = ActiveRecord::Base.connection.execute(
-      "SELECT pg_column_size(response_json) as size FROM llm_caches WHERE id = #{id}"
-    ).first["size"]
-
-    request_size + response_size
-  end
-
-  # Update bytes_size after save
+  # Update bytes_size before save
   before_save :calculate_and_set_bytes_size
 
   def calculate_and_set_bytes_size
-    return unless persisted? || request_json.present? || response_json.present?
-
     self.bytes_size = calculate_bytes_size_from_values
   end
 
