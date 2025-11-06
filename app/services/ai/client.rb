@@ -3,12 +3,12 @@ require_relative "../../lib/rate_limiter"
 module Ai
   class Client
     # Get the global rate limiter (lazy initialization)
-    # Conservative: 3 requests per second
+    # 100 requests per second
     def self.global_rate_limiter
       @global_rate_limiter ||= RateLimiter.new(
         redis: REDIS_FOR_RATE_LIMITING,
         key: "rate:llm:global",
-        limit: 3,
+        limit: 100,
         period: 1.0
       )
     end
