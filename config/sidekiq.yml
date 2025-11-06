@@ -7,7 +7,7 @@ queues:
 
 :schedule:
   sync_source_enqueuer:
-    every: ["15s"]
+    every: ["3s"]
     class: "SyncSourceEnqueuerWorker"
     queue: scheduler
   loops_dispatch:
