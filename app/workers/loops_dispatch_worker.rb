@@ -4,16 +4,13 @@ require_relative "../lib/email_normalizer"
 
 class LoopsDispatchWorker
   include Sidekiq::Worker
-  include Sidekiq::Throttled::Job
 
   sidekiq_options queue: :default
 
-  # Limit concurrent jobs to match Loops API rate limit
-  # This prevents all worker threads from being consumed by this worker
-  # The limit matches LoopsService.rate_limit_rps (10 RPS)
-  sidekiq_throttle(
-    concurrency: { limit: LoopsService.rate_limit_rps }
-  )
+  # Redis semaphore for limiting concurrent jobs
+  SEMAPHORE_KEY = "loops_dispatch:semaphore"
+  MAX_CONCURRENT = 10  # Matches LoopsService.rate_limit_rps
+  SEMAPHORE_TTL = 3600  # 1 hour safety net for crashed jobs
 
   # Advisory lock namespace for per-email locking (same as PrepareLoopsFieldsForOutboxJob)
   ADVISORY_LOCK_NAMESPACE = 0x504C4600  # ASCII: "PLF" (PrepareLoopsFields)
@@ -21,33 +18,101 @@ class LoopsDispatchWorker
   BATCH_SIZE = 50  # Process up to 50 emails per run
 
   def perform
-    # Batch envelopes by email using FOR UPDATE SKIP LOCKED for concurrent workers
-    processed_count = 0
-
-    loop do
-      # Get a batch of queued envelopes (skip locked to allow concurrent workers)
-      # Lock the envelopes themselves, then group by email
-      envelopes = LoopsOutboxEnvelope.queued
-                                     .order(:created_at)
-                                     .limit(BATCH_SIZE)
-                                     .lock("FOR UPDATE SKIP LOCKED")
-                                     .to_a
-
-      break if envelopes.empty?
-
-      # Group by email and process each email
-      envelopes_by_email = envelopes.group_by(&:email_normalized)
-
-      envelopes_by_email.each do |email_normalized, email_envelopes|
-        process_email(email_normalized)
-        processed_count += 1
-      end
+    # Acquire semaphore slot - skip if at limit
+    unless acquire_semaphore
+      Rails.logger.debug("LoopsDispatchWorker: Skipping - at concurrency limit (#{self.class.semaphore_count}/#{MAX_CONCURRENT})")
+      return 0
     end
 
-    processed_count
+    begin
+      # Batch envelopes by email using FOR UPDATE SKIP LOCKED for concurrent workers
+      processed_count = 0
+
+      loop do
+        # Get a batch of queued envelopes (skip locked to allow concurrent workers)
+        # Lock the envelopes themselves, then group by email
+        envelopes = LoopsOutboxEnvelope.queued
+                                       .order(:created_at)
+                                       .limit(BATCH_SIZE)
+                                       .lock("FOR UPDATE SKIP LOCKED")
+                                       .to_a
+
+        break if envelopes.empty?
+
+        # Group by email and process each email
+        envelopes_by_email = envelopes.group_by(&:email_normalized)
+
+        envelopes_by_email.each do |email_normalized, email_envelopes|
+          process_email(email_normalized)
+          processed_count += 1
+        end
+      end
+
+      processed_count
+    ensure
+      # Always release semaphore, even if job crashes
+      release_semaphore
+    end
+  end
+
+  # Redis semaphore methods for limiting concurrent execution
+
+  # Get the current number of concurrent LoopsDispatchWorker jobs
+  def self.semaphore_count
+    redis = REDIS_FOR_RATE_LIMITING
+    redis.scard(SEMAPHORE_KEY).to_i
+  rescue => e
+    Rails.logger.warn("LoopsDispatchWorker: Failed to check semaphore count: #{e.message}")
+    0
+  end
+
+  # Try to acquire a semaphore slot (returns true if acquired, false if at limit)
+  # Public so tests can access it
+  def acquire_semaphore
+    redis = REDIS_FOR_RATE_LIMITING
+    jid = @jid || self.jid || SecureRandom.hex(12)
+    self.semaphore_jid = jid  # Store for release
+    
+    # Use Lua script for atomic check-and-add
+    # This ensures we don't exceed MAX_CONCURRENT even with concurrent requests
+    script = <<~LUA
+      local key = KEYS[1]
+      local jid = ARGV[1]
+      local max_concurrent = tonumber(ARGV[2])
+      local ttl = tonumber(ARGV[3])
+      
+      local count = redis.call('SCARD', key)
+      
+      if count < max_concurrent then
+        redis.call('SADD', key, jid)
+        redis.call('EXPIRE', key, ttl)
+        return 1
+      else
+        return 0
+      end
+    LUA
+    
+    result = redis.eval(script, keys: [SEMAPHORE_KEY], argv: [jid, MAX_CONCURRENT.to_s, SEMAPHORE_TTL.to_s])
+    result == 1
+  rescue => e
+    Rails.logger.warn("LoopsDispatchWorker: Failed to acquire semaphore: #{e.message}")
+    false
+  end
+
+  # Release semaphore slot
+  # Public so tests can access it
+  def release_semaphore
+    redis = REDIS_FOR_RATE_LIMITING
+    jid = semaphore_jid || @jid || self.jid || SecureRandom.hex(12)
+    redis.srem(SEMAPHORE_KEY, jid)
+  rescue => e
+    Rails.logger.warn("LoopsDispatchWorker: Failed to release semaphore: #{e.message}")
   end
 
   private
+
+  # Store the jid used for semaphore (set during acquire, used during release)
+  attr_accessor :semaphore_jid
 
   def process_email(email_normalized)
     # Acquire per-email advisory lock

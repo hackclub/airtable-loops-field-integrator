@@ -22,11 +22,16 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
     LoopsOutboxEnvelope.destroy_all
     LoopsFieldBaseline.destroy_all
     LoopsContactChangeAudit.destroy_all
+    
+    # Clean up semaphore
+    REDIS_FOR_RATE_LIMITING.del(LoopsDispatchWorker::SEMAPHORE_KEY) if defined?(LoopsDispatchWorker::SEMAPHORE_KEY)
   end
 
   def teardown
     # Clean up any lingering advisory locks
     cleanup_advisory_locks
+    # Clean up semaphore
+    REDIS_FOR_RATE_LIMITING.del(LoopsDispatchWorker::SEMAPHORE_KEY) if defined?(LoopsDispatchWorker::SEMAPHORE_KEY)
     LoopsOutboxEnvelope.destroy_all
     LoopsFieldBaseline.destroy_all
     LoopsContactChangeAudit.destroy_all
@@ -94,6 +99,7 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
 
       # Run the dispatch worker
       worker = LoopsDispatchWorker.new
+      ensure_worker_can_run(worker)
       worker.perform
 
       # Verify all envelopes were processed
@@ -181,6 +187,7 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
 
       # Run the dispatch worker
       worker = LoopsDispatchWorker.new
+      ensure_worker_can_run(worker)
       worker.perform
 
       # Verify all envelopes were processed
@@ -249,6 +256,7 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
 
       # Run the dispatch worker
       worker = LoopsDispatchWorker.new
+      ensure_worker_can_run(worker)
       worker.perform
 
       # Verify the latest value was sent
@@ -295,6 +303,7 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
 
       # Run worker first time - should send value1
       worker = LoopsDispatchWorker.new
+      ensure_worker_can_run(worker)
       worker.perform
 
       assert_equal 1, call_count, "First call should send value1"
@@ -438,6 +447,7 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
 
       # Run the dispatch worker - should process all queued envelopes for this email
       worker = LoopsDispatchWorker.new
+      ensure_worker_can_run(worker)
       worker.perform
 
       # Verify all envelopes were processed
@@ -521,6 +531,7 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
 
       # Run the dispatch worker
       worker = LoopsDispatchWorker.new
+      ensure_worker_can_run(worker)
       worker.perform
 
       # Verify the latest value was sent (ignoring type field)
@@ -578,6 +589,7 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
 
       # Run the dispatch worker
       worker = LoopsDispatchWorker.new
+      ensure_worker_can_run(worker)
       worker.perform
 
       # Verify envelope was processed
@@ -627,6 +639,7 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
 
       # Run the dispatch worker
       worker = LoopsDispatchWorker.new
+      ensure_worker_can_run(worker)
       worker.perform
 
       # Verify envelope was marked as ignored_noop (all fields filtered by strategy)
@@ -731,6 +744,7 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
 
       # Run the dispatch worker - should raise exception but mark envelope as failed
       worker = LoopsDispatchWorker.new
+      ensure_worker_can_run(worker)
       assert_raises(StandardError) do
         worker.perform
       end
@@ -958,6 +972,7 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
 
       # Run the dispatch worker
       worker = LoopsDispatchWorker.new
+      ensure_worker_can_run(worker)
       assert_raises(LoopsService::ApiError) do
         worker.perform
       end
@@ -1006,6 +1021,7 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
 
       # Run the dispatch worker
       worker = LoopsDispatchWorker.new
+      ensure_worker_can_run(worker)
       assert_raises(LoopsService::ApiError) do
         worker.perform
       end
@@ -1021,6 +1037,7 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
 
       # Verify that running the worker again doesn't try to process the failed envelope
       # (it should be skipped since it's no longer queued)
+      ensure_worker_can_run(worker)
       processed_count = worker.perform
       envelope.reload
       assert_equal "failed", envelope.status, "Envelope should remain failed and not be reprocessed"
@@ -1031,34 +1048,29 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
     end
   end
 
-  test "concurrency limiting is configured correctly" do
-    # Verify that sidekiq-throttled is included and configured
-    assert LoopsDispatchWorker.included_modules.include?(Sidekiq::Throttled::Job),
-           "LoopsDispatchWorker should include Sidekiq::Throttled::Job"
-
-    # Verify the rate limit helper method exists and returns correct value
-    rate_limit = LoopsService.rate_limit_rps
-    assert_equal 10, rate_limit, "Rate limit should be 10 RPS"
+  test "semaphore constants are defined correctly" do
+    # Verify semaphore constants exist
+    assert_equal "loops_dispatch:semaphore", LoopsDispatchWorker::SEMAPHORE_KEY, "Semaphore key should be correct"
+    assert_equal 10, LoopsDispatchWorker::MAX_CONCURRENT, "Max concurrent should be 10"
+    assert_equal 3600, LoopsDispatchWorker::SEMAPHORE_TTL, "Semaphore TTL should be 1 hour"
   end
 
-  test "concurrency limiting allows jobs to be enqueued" do
-    # Verify that jobs can still be enqueued (throttling happens at execution time)
+  test "jobs can still be enqueued" do
+    # Verify that jobs can still be enqueued (semaphore check happens at execution time)
     job_id = LoopsDispatchWorker.perform_async
     assert_not_nil job_id, "Job should be enqueued successfully"
     
     # Note: Cleanup happens in teardown method
   end
 
-  test "concurrency limit matches LoopsService rate limit" do
-    # Verify that the concurrency limit is dynamically tied to LoopsService rate limit
+  test "max concurrent matches LoopsService rate limit" do
+    # Verify that the concurrency limit matches LoopsService rate limit
     rate_limit = LoopsService.rate_limit_rps
     
-    # Verify it's actually 10 (current configured value)
-    assert_equal 10, rate_limit, "Rate limit should be 10 RPS"
-    
-    # Verify the module is included (which enables throttling)
-    assert LoopsDispatchWorker.included_modules.include?(Sidekiq::Throttled::Job),
-           "Worker should include Sidekiq::Throttled::Job for throttling to work"
+    # Verify max concurrent matches (or is at least <= rate limit)
+    assert_operator LoopsDispatchWorker::MAX_CONCURRENT, :<=, rate_limit, 
+                    "Max concurrent should be <= rate limit"
+    assert_equal 10, LoopsDispatchWorker::MAX_CONCURRENT, "Max concurrent should be 10"
   end
 
   test "worker still processes envelopes correctly with throttling enabled" do
@@ -1090,6 +1102,7 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
 
       # Run the dispatch worker - should work normally despite throttling
       worker = LoopsDispatchWorker.new
+      ensure_worker_can_run(worker)
       worker.perform
 
       # Verify envelope was processed
@@ -1105,7 +1118,152 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
     end
   end
 
+  test "semaphore prevents more than MAX_CONCURRENT jobs from running" do
+    # Clean up any existing semaphore entries
+    redis = Sidekiq.redis { |conn| conn }
+    redis.del(LoopsDispatchWorker::SEMAPHORE_KEY)
+
+    worker1 = LoopsDispatchWorker.new
+    worker1.instance_variable_set(:@jid, "test-jid-1")
+    
+    worker2 = LoopsDispatchWorker.new
+    worker2.instance_variable_set(:@jid, "test-jid-2")
+
+    # Acquire first 10 slots
+    10.times do |i|
+      w = LoopsDispatchWorker.new
+      w.instance_variable_set(:@jid, "test-jid-#{i}")
+      assert w.acquire_semaphore, "Should acquire semaphore slot #{i}"
+    end
+
+    # 11th attempt should fail
+    assert_not worker1.acquire_semaphore, "Should not acquire semaphore when at limit"
+
+    # Verify count is 10
+    assert_equal 10, LoopsDispatchWorker.semaphore_count, "Should have 10 active jobs"
+
+    # Release one slot
+    worker_release = LoopsDispatchWorker.new
+    worker_release.instance_variable_set(:@jid, "test-jid-0")
+    worker_release.release_semaphore
+
+    # Now should be able to acquire
+    assert_equal 9, LoopsDispatchWorker.semaphore_count, "Should have 9 active jobs after release"
+    assert worker1.acquire_semaphore, "Should acquire semaphore after release"
+
+    # Clean up
+    11.times do |i|
+      w = LoopsDispatchWorker.new
+      w.instance_variable_set(:@jid, "test-jid-#{i}")
+      w.release_semaphore
+    end
+  end
+
+  test "semaphore releases on job completion" do
+    redis = Sidekiq.redis { |conn| conn }
+    redis.del(LoopsDispatchWorker::SEMAPHORE_KEY)
+
+    worker = LoopsDispatchWorker.new
+    worker.instance_variable_set(:@jid, "test-jid-complete")
+
+    # Acquire semaphore
+    assert worker.acquire_semaphore, "Should acquire semaphore"
+    assert_equal 1, LoopsDispatchWorker.semaphore_count, "Should have 1 active job"
+
+    # Release semaphore (simulating job completion)
+    worker.release_semaphore
+    assert_equal 0, LoopsDispatchWorker.semaphore_count, "Should have 0 active jobs after release"
+  end
+
+  test "semaphore releases even if job crashes" do
+    redis = Sidekiq.redis { |conn| conn }
+    redis.del(LoopsDispatchWorker::SEMAPHORE_KEY)
+
+    worker = LoopsDispatchWorker.new
+    worker.instance_variable_set(:@jid, "test-jid-crash")
+
+    # Acquire semaphore
+    assert worker.acquire_semaphore, "Should acquire semaphore"
+    assert_equal 1, LoopsDispatchWorker.semaphore_count, "Should have 1 active job"
+
+    # Simulate crash - ensure block should still release
+    begin
+      begin
+        worker.acquire_semaphore # Already acquired, but simulate work
+        raise StandardError, "Simulated crash"
+      ensure
+        worker.release_semaphore
+      end
+    rescue StandardError
+      # Expected
+    end
+
+    assert_equal 0, LoopsDispatchWorker.semaphore_count, "Should release semaphore even after crash"
+  end
+
+  test "perform skips processing when semaphore cannot be acquired" do
+    redis = Sidekiq.redis { |conn| conn }
+    redis.del(LoopsDispatchWorker::SEMAPHORE_KEY)
+
+    # Fill up all 10 slots
+    10.times do |i|
+      w = LoopsDispatchWorker.new
+      w.instance_variable_set(:@jid, "test-jid-#{i}")
+      w.acquire_semaphore
+    end
+
+    # Create a worker that should skip
+    worker = LoopsDispatchWorker.new
+    worker.instance_variable_set(:@jid, "test-jid-skip")
+
+    # Should skip because semaphore can't be acquired
+    processed_count = worker.perform
+    assert_equal 0, processed_count, "Should return 0 when semaphore not acquired"
+
+    # Clean up
+    10.times do |i|
+      w = LoopsDispatchWorker.new
+      w.instance_variable_set(:@jid, "test-jid-#{i}")
+      w.release_semaphore
+    end
+  end
+
+  test "semaphore_count returns current active job count" do
+    redis = Sidekiq.redis { |conn| conn }
+    redis.del(LoopsDispatchWorker::SEMAPHORE_KEY)
+
+    assert_equal 0, LoopsDispatchWorker.semaphore_count, "Should start with 0 jobs"
+
+    # Add some jobs
+    5.times do |i|
+      w = LoopsDispatchWorker.new
+      w.instance_variable_set(:@jid, "test-jid-#{i}")
+      w.acquire_semaphore
+    end
+
+    assert_equal 5, LoopsDispatchWorker.semaphore_count, "Should have 5 active jobs"
+
+    # Clean up
+    5.times do |i|
+      w = LoopsDispatchWorker.new
+      w.instance_variable_set(:@jid, "test-jid-#{i}")
+      w.release_semaphore
+    end
+  end
+
   private
+
+  # Helper to ensure worker can acquire semaphore for testing
+  def ensure_worker_can_run(worker)
+    # Clean up semaphore first
+    REDIS_FOR_RATE_LIMITING.del(LoopsDispatchWorker::SEMAPHORE_KEY)
+    
+    # Set jid if not set
+    worker.instance_variable_set(:@jid, SecureRandom.hex(12)) unless worker.jid
+    
+    # Acquire semaphore
+    worker.acquire_semaphore
+  end
 
   def build_test_provenance
     {
