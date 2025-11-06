@@ -13,7 +13,7 @@ class LoopsService
     @global_rate_limiter ||= RateLimiter.new(
       redis: REDIS_FOR_RATE_LIMITING,
       key: "rate:loops:global",
-      limit: 15,
+      limit: 10,
       period: 1.0
     )
   end
