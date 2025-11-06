@@ -93,3 +93,9 @@ production:
   # Use the full connection URL provided by the hosting platform.
   # Example: postgres://USER:PASSWORD@HOST:5432/DBNAME
   url: <%= ENV["DATABASE_URL"] %>
+
+# Production readonly connection for inspection and debugging
+# Uses PROD_READONLY_DATABASE_URL from environment
+production_readonly:
+  <<: *default
+  url: <%= ENV["PROD_READONLY_DATABASE_URL"] %>
