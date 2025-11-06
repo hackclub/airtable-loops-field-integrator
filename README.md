@@ -43,3 +43,21 @@ To-Do:
   - Maybe pull from envelopes? Show detailed errors
 - Once mailing list stuff is deployed, migrate all Zapiers over and disable Zapiers
 - For `LlmCache`, we probably don't need to store the full request. Hash is probably enough.
+
+## Config
+
+```
+# airtable token with access to whatever bases you want it to poll
+AIRTABLE_PERSONAL_ACCESS_TOKEN=
+# for updating loops contacts
+LOOPS_API_KEY=
+# for splitting addresses and full names into individual parts
+OPENAI_API_KEY=
+# optional - ID of the mailing list to automatically add all new contacts to, ex. "Announcements"
+DEFAULT_LOOPS_LIST_ID=
+# optional - URL of a readonly user to the prod database for easier debugging
+PROD_READONLY_DATABASE_URL=
+
+# must be set on 1 of the sidekiq workers. this will cause that worker to queue cron jobs
+SIDEKIQ_SCHEDULER=1
+```
