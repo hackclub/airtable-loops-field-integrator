@@ -21,6 +21,7 @@ class SyncSourcePollWorkerTest < ActiveSupport::TestCase
   def teardown
     # Clean up any lingering advisory locks before cleanup
     cleanup_advisory_locks
+    LoopsOutboxEnvelope.destroy_all  # Destroy envelopes before sync_sources
     SyncSource.destroy_all
     FieldValueBaseline.destroy_all
     # Final cleanup after data deletion

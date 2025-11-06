@@ -23,6 +23,7 @@ class PrepareLoopsFieldsSpecialFieldsTest < ActiveJob::TestCase
   def teardown
     LoopsOutboxEnvelope.destroy_all
     LlmCache.destroy_all
+    LoopsListSubscription.destroy_all  # Clean up mailing list subscriptions
     SyncSource.destroy_all
   end
 

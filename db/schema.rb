@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_11_05_151159) do
+ActiveRecord::Schema[8.0].define(version: 2025_11_05_213838) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -81,6 +81,27 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_05_151159) do
     t.datetime "updated_at", null: false
     t.index ["email_normalized", "field_name"], name: "index_loops_field_baselines_on_email_normalized_and_field_name", unique: true
     t.index ["expires_at"], name: "index_loops_field_baselines_on_expires_at"
+  end
+
+  create_table "loops_list_subscriptions", force: :cascade do |t|
+    t.string "email_normalized", null: false
+    t.string "list_id", null: false
+    t.datetime "subscribed_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["email_normalized", "list_id"], name: "idx_unique_loops_list_subscriptions", unique: true
+    t.index ["email_normalized"], name: "index_loops_list_subscriptions_on_email_normalized"
+  end
+
+  create_table "loops_lists", force: :cascade do |t|
+    t.string "loops_list_id", null: false
+    t.string "name"
+    t.boolean "is_public"
+    t.text "description"
+    t.datetime "synced_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["loops_list_id"], name: "index_loops_lists_on_loops_list_id", unique: true
   end
 
   create_table "loops_outbox_envelopes", force: :cascade do |t|

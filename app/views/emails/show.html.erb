@@ -220,7 +220,23 @@
       <h3><span data-utc-time="<%= bucket_time.iso8601 %>"><%= bucket_time.strftime("%b %d, %Y %I:%M %p UTC") %></span></h3>
       <% audits.sort_by { |a| -a.occurred_at.to_i }.each do |audit| %>
         <div class="audit-entry">
-          <span class="field-name"><%= audit.field_name %></span>
+          <% 
+            # Handle mailing list subscriptions specially
+            if audit.field_name.start_with?("mailingList:")
+              list_id = audit.field_name.sub("mailingList:", "")
+              list_name = audit.provenance&.dig("list", "name") || list_id
+              if audit.new_loops_value == true && audit.former_loops_value == false
+                display_name = "Subscribed to #{list_name}"
+              elsif audit.new_loops_value == false && audit.former_loops_value == true
+                display_name = "Unsubscribed from #{list_name}"
+              else
+                display_name = "mailingList: #{list_name}"
+              end
+            else
+              display_name = audit.field_name
+            end
+          %>
+          <span class="field-name"><%= display_name %></span>
           <% if audit.former_loops_value %>
             <span class="old-value"><%= audit.former_loops_value.is_a?(Hash) || audit.former_loops_value.is_a?(Array) ? JSON.pretty_generate(audit.former_loops_value) : audit.former_loops_value.to_s %></span>
           <% else %>

@@ -13,6 +13,7 @@ class FieldValueBaselineTest < ActiveSupport::TestCase
 
   def teardown
     FieldValueBaseline.destroy_all
+    LoopsOutboxEnvelope.destroy_all  # Destroy envelopes before sync_sources
     SyncSource.destroy_all
   end
 

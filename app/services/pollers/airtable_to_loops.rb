@@ -63,7 +63,14 @@ module Pollers
       end
 
       current_field_map = loops_fields.map do |field_id, field|
-        [field_identifier(field_id, field["name"]), field["type"] || "unknown"]
+        field_type = field["type"] || "unknown"
+        value = if field_type == "formula"
+          formula = field.dig("options", "formula") || ""
+          "formula:#{formula}"
+        else
+          field_type
+        end
+        [field_identifier(field_id, field["name"]), value]
       end.to_h
 
       current_field_ids = current_field_map.keys
@@ -87,7 +94,7 @@ module Pollers
           previously_known_field_map.key?(field_id) &&
             previously_known_field_map[field_id] != current_field_map[field_id]
         end
-        log_info("Field type change(s) detected for: #{changed_fields.join(', ')} - fetching ALL records for this table")
+        log_info("Field type or formula change(s) detected for: #{changed_fields.join(', ')} - fetching ALL records for this table")
       end
 
       filter_formula = build_filter_formula(sync_source, email_field, skip_time_filter: needs_full_resync)
@@ -119,21 +126,24 @@ module Pollers
     def find_loops_fields(table)
       return {} unless table["fields"]
 
-      # Match fields starting with "Loops - ", "Loops - Override - ", or "Loops - Special - "
-      # Field name must be lowerCamelCase (starts with lowercase letter)
-      # Examples:
-      #   - "Loops - tmpZachLoopsApiTest" (regular)
-      #   - "Loops - Override - tmpZachLoopsApiTest2" (override)
-      #   - "Loops - Special - setFullName" (special AI field)
-      # Does NOT match: "Loops - Lists" (starts with uppercase)
+      # Match fields starting with "Loops - ", "Loops - Override - ", "Loops - Special - ", or "Loops List - "
+      # Field name must be lowerCamelCase (starts with lowercase letter) for "Loops - ..." fields
+      # "Loops List - ..." fields can have any name after the prefix
       loops_pattern = /\ALoops\s*-\s*(Override\s*-\s*|Special\s*-\s*)?[a-z][a-zA-Z0-9]*\z/i
+      loops_list_pattern = /\ALoops\s+List\s*-\s*.+\z/i
 
       loops_fields = {}
       table["fields"].each do |field|
         field_name = field["name"] || ""
-        # Check case-insensitively for "Loops" prefix, but field name must start lowercase
+        
+        # Check for "Loops List - ..." fields
+        if field_name.strip.match?(loops_list_pattern)
+          loops_fields[field["id"]] = field
+          next
+        end
+        
+        # Check for regular "Loops - ..." fields (must start with lowercase after prefix)
         if field_name.strip.match?(loops_pattern)
-          # Double-check: after removing prefix, first char must be lowercase
           field_name_without_prefix = field_name.sub(/\ALoops\s*-\s*(Override\s*-\s*|Special\s*-\s*)?/i, "")
           if field_name_without_prefix =~ /\A[a-z]/
             loops_fields[field["id"]] = field

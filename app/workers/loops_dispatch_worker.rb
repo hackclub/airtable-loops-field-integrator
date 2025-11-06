@@ -103,14 +103,8 @@ class LoopsDispatchWorker
         # Merge envelopes: combine payloads, latest modified_at wins per field
         merged_payload = merge_envelopes(envelopes)
 
-        # If new contact, inject initial fields BEFORE baseline filtering
-        if sync_source && !contact_exists
-          initial_fields = LoopsFieldBaseline.initial_payload_for_new_contact(sync_source)
-          initial_fields.each do |field_name, field_data|
-            # Only add if not already present (queued envelopes take precedence)
-            merged_payload[field_name] ||= field_data
-          end
-        end
+        # Process mailing lists: idempotence, default list, catalog sync, validation
+        process_mailing_lists(merged_payload, email_normalized, sync_source, contact_exists, envelopes)
 
         # Filter by loops_field_baselines AFTER merging
         filtered_payload = filter_by_baselines(email_normalized, merged_payload)
@@ -135,6 +129,7 @@ class LoopsDispatchWorker
         # audit records (what was sent + response), and baselines (what was persisted)
         request_id = nil
         response = nil
+        
         begin
           response = LoopsService.update_contact(email: email_normalized, **loops_payload)
 
@@ -172,27 +167,27 @@ class LoopsDispatchWorker
           Rails.logger.error("LoopsDispatchWorker: Error updating Loops contact: #{e.class} - #{e.message}")
           Rails.logger.error("LoopsDispatchWorker: Error backtrace: #{e.backtrace.first(5).join("\n")}")
 
-          # Wrap envelope updates in a transaction to ensure they're committed
-          # Use update_columns to bypass validations and ensure persistence
+          # Mark envelopes as failed and store full error details in DB for debugging
+          error_hash = {
+            message: e.message,
+            class: e.class.name,
+            loops_payload_sent: loops_payload,  # Store what was actually sent
+            backtrace: e.backtrace.first(10),  # Store backtrace for debugging
+            occurred_at: Time.current.iso8601
+          }
+          # Include response if available (e.g., when error comes from unsuccessful API response)
+          error_hash[:response] = response if defined?(response) && response
+          
           ApplicationRecord.transaction do
-          envelopes.each do |envelope|
-              error_hash = {
-                message: e.message,
-                class: e.class.name,
-                loops_payload_sent: loops_payload,  # Store what was actually sent
-                backtrace: e.backtrace.first(10),  # Store backtrace for debugging
-                occurred_at: Time.current.iso8601
-              }
-              # Include response if available (e.g., when error comes from unsuccessful API response)
-              error_hash[:response] = response if defined?(response) && response
-              
+            envelopes.each do |envelope|
               envelope.update_columns(
                 status: :failed,
                 error: error_hash,
                 updated_at: Time.current
-            )
+              )
+            end
           end
-          end
+          
           # Re-raise exception after ensuring envelopes are marked as failed
           raise
         end
@@ -203,6 +198,9 @@ class LoopsDispatchWorker
           filtered_fields = Set.new
 
           filtered_payload.each do |field_name, field_data|
+            # Skip mailingLists - we handle it separately with individual entries per list subscription
+            next if field_name == "mailingLists" || field_name == :mailingLists
+            
             if loops_payload.key?(field_name)
               sent_fields << field_name
 
@@ -289,13 +287,113 @@ class LoopsDispatchWorker
             end
           end
 
-          # Determine final status
-          if filtered_fields.empty?
-            # All fields sent
-            envelopes.each { |e| e.update!(status: :sent) }
-          else
-            # Some fields sent, some filtered
-            envelopes.each { |e| e.update!(status: :partially_sent) }
+          # Handle mailing lists separately: create subscription records and audit entries
+          if response && response["success"] == true && loops_payload.key?("mailingLists")
+            # Add mailingLists to sent_fields since it was successfully sent
+            sent_fields << "mailingLists"
+
+            mailing_lists_value = loops_payload["mailingLists"]
+            if mailing_lists_value.is_a?(Hash)
+              now = Time.current
+              provenance = envelopes.first.provenance
+
+              mailing_lists_value.each do |list_id, subscribed|
+                next unless subscribed == true
+
+                # Create subscription record
+                begin
+                  subscription = LoopsListSubscription.create!(
+                    email_normalized: email_normalized,
+                    list_id: list_id
+                    # subscribed_at is automatically set by database default
+                  )
+
+                  # Find list catalog entry for friendly name
+                  loops_list = LoopsList.find_by(loops_list_id: list_id)
+
+                  # Create audit record
+                  audit_provenance = {
+                    "sync_source_type" => provenance["sync_source_type"],
+                    "list" => {
+                      "id" => list_id,
+                      "name" => loops_list&.name,
+                      "is_public" => loops_list&.is_public
+                    },
+                    "loops_api_response" => response,
+                    "loops_payload_sent" => { "mailingLists" => { list_id => true } }
+                  }
+
+                  if provenance["sync_source_metadata"]
+                    audit_provenance["sync_source_metadata"] = provenance["sync_source_metadata"]
+                  end
+
+                  # Find field provenance for mailing lists
+                  # Default list and lists added by safety net won't have field provenance - that's OK
+                  field_provenance = provenance["fields"]&.find { |f|
+                    f["derived_to_loops_field"] == "mailingLists" &&
+                    (f["mailing_list_ids"] || []).include?(list_id)
+                  }
+
+                  # Create audit record - wrap in begin/rescue to ensure subscription isn't lost if audit fails
+                  begin
+                    LoopsContactChangeAudit.create!(
+                      occurred_at: now,
+                      email_normalized: email_normalized,
+                      field_name: "mailingList:#{list_id}",
+                      former_loops_value: false,
+                      new_loops_value: true,
+                      former_sync_source_value: field_provenance&.dig("former_sync_source_value"),
+                      new_sync_source_value: field_provenance&.dig("new_sync_source_value"),
+                      strategy: "subscribe",
+                      sync_source_id: provenance["sync_source_id"],
+                      sync_source_table_id: provenance["sync_source_table_id"],
+                      sync_source_record_id: provenance["sync_source_record_id"],
+                      sync_source_field_id: field_provenance&.dig("sync_source_field_id"),
+                      provenance: audit_provenance,
+                      request_id: request_id
+                    )
+                  rescue => e
+                    # Log error but don't fail - subscription was created successfully
+                    Rails.logger.error("LoopsDispatchWorker: Failed to create audit log for mailingList:#{list_id} for #{email_normalized}: #{e.class} - #{e.message}")
+                    Rails.logger.error("LoopsDispatchWorker: Audit log failure backtrace: #{e.backtrace.first(5).join("\n")}")
+                  end
+                rescue ActiveRecord::RecordNotUnique
+                  # Already subscribed - skip silently
+                  Rails.logger.debug("LoopsDispatchWorker: User #{email_normalized} already subscribed to list #{list_id}")
+                end
+              end
+            end
+          end
+
+          # Determine final status based on what was sent vs filtered
+          envelopes.each do |envelope|
+            envelope_fields = Set.new(envelope.payload.keys)
+            envelope_sent_fields = envelope_fields & sent_fields
+            envelope_filtered_fields = envelope_fields & filtered_fields
+            
+            # Determine status:
+            # - If all fields sent → sent
+            # - If some sent, some filtered → partially_sent
+            # - If all filtered → ignored_noop (shouldn't happen here, but handle it)
+            # - If has validation warnings (e.g., invalid list IDs) → partially_sent
+            
+            next if envelope.reload.status == "failed"  # Skip if already marked as failed
+            
+            # Check for validation warnings (e.g., invalid mailing list IDs)
+            has_validation_warnings = envelope.error.present? && 
+                                     envelope.error.is_a?(Hash) && 
+                                     envelope.error["validation_warnings"].present?
+            
+            if envelope_sent_fields.any? && envelope_filtered_fields.empty? && !has_validation_warnings
+              # All envelope fields were sent successfully, no validation warnings
+              envelope.update!(status: :sent)
+            elsif envelope_sent_fields.any? || has_validation_warnings
+              # Some fields sent, some filtered, or has validation warnings
+              envelope.update!(status: :partially_sent)
+            else
+              # All fields filtered (shouldn't happen at this point, but handle it)
+              envelope.update!(status: :ignored_noop)
+            end
           end
         end
       rescue => e
@@ -308,22 +406,35 @@ class LoopsDispatchWorker
         # Skip if envelopes are already marked as failed (e.g., from preflight check)
         if defined?(envelopes) && envelopes && !envelopes.empty?
           # Check if envelopes are already marked as failed
-          already_failed = envelopes.all? { |e| e.reload.status == "failed" }
+          # Use safe reload that handles deleted records
+          already_failed = envelopes.all? do |e|
+            begin
+              e.reload.status == "failed"
+            rescue ActiveRecord::RecordNotFound
+              # Envelope was deleted (e.g., in transaction rollback) - skip
+              true
+            end
+          end
           
           unless already_failed
             ApplicationRecord.transaction do
               envelopes.each do |envelope|
-                envelope.update_columns(
-                  status: :failed,
-                  error: {
-                    message: e.message,
-                    class: e.class.name,
-                    stage: "processing",
-                    backtrace: e.backtrace.first(10),
-                    occurred_at: Time.current.iso8601
-                  },
-                  updated_at: Time.current
-                )
+                begin
+                  envelope.update_columns(
+                    status: :failed,
+                    error: {
+                      message: e.message,
+                      class: e.class.name,
+                      stage: "processing",
+                      backtrace: e.backtrace.first(10),
+                      occurred_at: Time.current.iso8601
+                    },
+                    updated_at: Time.current
+                  )
+                rescue ActiveRecord::RecordNotFound
+                  # Envelope was deleted - skip
+                  next
+                end
               end
             end
           end
@@ -386,6 +497,12 @@ class LoopsDispatchWorker
     filtered = {}
 
     merged_payload.each do |field_name, field_data|
+      # Skip mailingLists - it's handled separately via LoopsListSubscription table
+      if field_name == "mailingLists" || field_name == :mailingLists
+        filtered[field_name] = field_data
+        next
+      end
+
       # Handle both string and symbol keys
       field_data_hash = field_data.is_a?(Hash) ? field_data : {}
       current_value = field_data_hash[:value] || field_data_hash["value"]
@@ -449,5 +566,180 @@ class LoopsDispatchWorker
     end
 
     result
+  end
+
+  # Process mailing lists: idempotence check, default list injection, catalog sync, validation
+  def process_mailing_lists(merged_payload, email_normalized, sync_source, contact_exists, envelopes)
+    # Extract list IDs from payload
+    list_ids = extract_mailing_lists_list_ids(merged_payload)
+    
+    # Step 2: Add default list for new contacts if needed
+    if sync_source && !contact_exists
+      list_ids = add_default_list_if_needed(email_normalized, list_ids)
+      
+      # Also inject other initial fields (userGroup, source)
+      inject_initial_fields_for_new_contact(merged_payload, sync_source, email_normalized)
+    end
+    
+    # Return early if no lists to process
+    if list_ids.empty?
+      update_mailing_lists_payload(merged_payload, [])
+      return
+    end
+    
+    # Step 1: Idempotence check - filter out already-subscribed lists
+    list_ids = filter_idempotent_lists(email_normalized, list_ids)
+    
+    # Return early if all lists were already subscribed
+    if list_ids.empty?
+      update_mailing_lists_payload(merged_payload, [])
+      return
+    end
+    
+    # Step 3: Ensure catalog is populated before validation
+    ensure_catalog_populated
+    
+    # Step 4: Validate list IDs against catalog
+    validation_result = validate_list_ids(list_ids)
+    
+    # Store validation warnings in envelopes if invalid IDs found
+    if validation_result[:invalid_list_ids].any?
+      store_validation_warnings(envelopes, validation_result[:invalid_list_ids], sync_source, contact_exists)
+    end
+    
+    # Update payload with validated list IDs
+    update_mailing_lists_payload(merged_payload, validation_result[:valid_list_ids])
+  end
+
+  # Extract mailing list IDs from payload (handles string/symbol keys)
+  def extract_mailing_lists_list_ids(payload)
+    data = payload["mailingLists"] || payload[:mailingLists]
+    return [] unless data.is_a?(Hash)
+    
+    value = data[:value] || data["value"] || {}
+    return [] unless value.is_a?(Hash)
+    
+    value.select { |_id, subscribed| subscribed == true }.keys
+  end
+
+  # Filter out already-subscribed lists (idempotence check)
+  def filter_idempotent_lists(email_normalized, list_ids)
+    return [] if list_ids.empty?
+    
+    already_subscribed = LoopsListSubscription.where(
+      email_normalized: email_normalized,
+      list_id: list_ids
+    ).pluck(:list_id).to_set
+    
+    (list_ids.to_set - already_subscribed).to_a
+  end
+
+  # Add default list for new contacts if not already subscribed
+  def add_default_list_if_needed(email_normalized, list_ids)
+    default_id = ENV["DEFAULT_LOOPS_LIST_ID"].presence
+    return list_ids unless default_id
+    
+    # Skip if already in list or already subscribed
+    return list_ids if list_ids.include?(default_id)
+    return list_ids if LoopsListSubscription.exists?(
+      email_normalized: email_normalized,
+      list_id: default_id
+    )
+    
+    list_ids + [default_id]
+  end
+
+  # Inject initial fields (userGroup, source) for new contacts
+  def inject_initial_fields_for_new_contact(merged_payload, sync_source, email_normalized)
+    initial_fields = LoopsFieldBaseline.initial_payload_for_new_contact(sync_source)
+    initial_fields.each do |field_name, field_data|
+      # Skip mailingLists - we handle it separately above
+      next if field_name == "mailingLists" || field_name == :mailingLists
+      
+      # Only add if not already present (queued envelopes take precedence)
+      merged_payload[field_name] ||= field_data
+    end
+  end
+
+  # Ensure LoopsList catalog is populated (sync if empty)
+  def ensure_catalog_populated
+    return if LoopsList.count > 0
+    
+    Rails.logger.info("LoopsDispatchWorker: LoopsList catalog is empty, syncing lists before validation")
+    
+    # Use advisory lock to prevent concurrent syncs
+    lock_id = 0x4C4C5353  # ASCII: "LLSS" (Loops List Sync)
+    
+    ActiveRecord::Base.connection_pool.with_connection do |connection|
+      result = connection.execute("SELECT pg_try_advisory_lock(#{lock_id})")
+      lock_acquired = result.first["pg_try_advisory_lock"]
+      
+      if lock_acquired
+        begin
+          # Double-check after acquiring lock (another process might have populated it)
+          SyncLoopsListsWorker.new.perform if LoopsList.count == 0
+        ensure
+          connection.execute("SELECT pg_advisory_unlock(#{lock_id})")
+        end
+      else
+        # Another process is syncing - wait briefly and check again
+        sleep(0.5)
+        if LoopsList.count == 0
+          Rails.logger.warn("LoopsDispatchWorker: Catalog still empty after sync attempt, proceeding with validation")
+        end
+      end
+    end
+  end
+
+  # Validate list IDs against catalog
+  def validate_list_ids(list_ids)
+    return { valid_list_ids: [], invalid_list_ids: [] } if list_ids.empty?
+    
+    known_list_ids = LoopsList.where(loops_list_id: list_ids)
+                              .pluck(:loops_list_id)
+                              .to_set
+    
+    valid_list_ids = (list_ids.to_set & known_list_ids).to_a
+    invalid_list_ids = (list_ids.to_set - known_list_ids).to_a
+    
+    { valid_list_ids: valid_list_ids, invalid_list_ids: invalid_list_ids }
+  end
+
+  # Update payload with validated list IDs (or remove if empty)
+  def update_mailing_lists_payload(payload, valid_list_ids)
+    if valid_list_ids.empty?
+      payload.delete("mailingLists")
+      payload.delete(:mailingLists)
+    else
+      payload["mailingLists"] = {
+        value: valid_list_ids.index_with { true },
+        strategy: :override,
+        modified_at: Time.current.iso8601
+      }
+    end
+  end
+
+  # Store validation warnings in envelopes
+  def store_validation_warnings(envelopes, invalid_list_ids, sync_source, contact_exists)
+    envelopes.each do |envelope|
+      # Only update if this envelope contains mailingLists OR if we added default list
+      has_mailing_lists = envelope.payload.key?("mailingLists") || envelope.payload.key?(:mailingLists)
+      is_default_list_case = sync_source && !contact_exists && invalid_list_ids.include?(ENV["DEFAULT_LOOPS_LIST_ID"].presence)
+      next unless has_mailing_lists || is_default_list_case
+      
+      # Merge validation warnings with existing error content
+      existing_error = envelope.error || {}
+      existing_error = existing_error.dup if existing_error.is_a?(Hash)
+      existing_error["validation_warnings"] = {
+        invalid_list_ids: invalid_list_ids,
+        message: "Some mailing list IDs were not found in Loops catalog",
+        occurred_at: Time.current.iso8601
+      }
+      
+      envelope.update_columns(
+        error: existing_error,
+        updated_at: Time.current
+      )
+    end
   end
 end

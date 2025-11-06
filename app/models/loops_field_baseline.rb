@@ -5,7 +5,7 @@ class LoopsFieldBaseline < ApplicationRecord
   scope :expired, -> { where("expires_at < ?", Time.current) }
 
   # Fields to skip when seeding from Loops response (system fields, not writable properties)
-  SYSTEM_FIELDS = %w[id email userId createdAt updatedAt unsubscribedAt listMemberships].freeze
+  SYSTEM_FIELDS = %w[id email userId createdAt updatedAt unsubscribedAt listMemberships mailingLists].freeze
 
   # Find or create a baseline for a given email and field
   def self.find_or_create_baseline(email_normalized:, field_name:)
@@ -46,6 +46,9 @@ class LoopsFieldBaseline < ApplicationRecord
     # Seed baselines from the contact's current properties
     seed_from_loops_response!(email_normalized, contact_hash)
 
+    # Also seed list subscriptions if they exist
+    seed_list_subscriptions_from_loops_response!(email_normalized, contact_hash)
+
     true
   end
 
@@ -78,12 +81,41 @@ class LoopsFieldBaseline < ApplicationRecord
     seeded_count
   end
 
+  # Seed mailing list subscriptions from Loops contact response
+  def self.seed_list_subscriptions_from_loops_response!(email_normalized, contact_hash)
+    mailing_lists = contact_hash["mailingLists"] || contact_hash[:mailingLists] || {}
+    return 0 unless mailing_lists.is_a?(Hash)
+
+    # Extract list IDs where value is true (subscribed)
+    list_ids = mailing_lists.select { |_id, subscribed| subscribed == true }.keys
+    return 0 if list_ids.empty?
+
+    seeded_count = 0
+
+    list_ids.each do |list_id|
+      # Create subscription record if it doesn't exist
+      subscription = LoopsListSubscription.find_or_initialize_by(
+        email_normalized: email_normalized,
+        list_id: list_id
+      )
+
+      # Only save if it's a new record (preserve original subscription time)
+      # subscribed_at is automatically set by database default
+      if subscription.new_record?
+        subscription.save!
+        seeded_count += 1
+      end
+    end
+
+    seeded_count
+  end
+
   # Generate initial payload for new contacts (userGroup and source fields)
   def self.initial_payload_for_new_contact(sync_source)
     source_value = humanized_source(sync_source)
     now = Time.current
 
-    {
+    payload = {
       "userGroup" => {
         value: "Hack Clubber",
         strategy: :upsert,
@@ -95,6 +127,17 @@ class LoopsFieldBaseline < ApplicationRecord
         modified_at: now
       }
     }
+
+    # Add default list if configured
+    if (default_id = ENV["DEFAULT_LOOPS_LIST_ID"].presence)
+      payload["mailingLists"] = {
+        value: { default_id => true },
+        strategy: :override,
+        modified_at: now
+      }
+    end
+
+    payload
   end
 
   # Generate humanized source string like "Airtable - Midnight RSVPs"

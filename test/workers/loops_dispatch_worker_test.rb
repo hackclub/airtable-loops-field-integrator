@@ -30,6 +30,7 @@ class LoopsDispatchWorkerTest < ActiveSupport::TestCase
     LoopsOutboxEnvelope.destroy_all
     LoopsFieldBaseline.destroy_all
     LoopsContactChangeAudit.destroy_all
+    LoopsListSubscription.destroy_all  # Clean up mailing list subscriptions
     SyncSource.destroy_all
   end
 

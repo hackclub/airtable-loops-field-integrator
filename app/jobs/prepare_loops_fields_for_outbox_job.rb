@@ -63,8 +63,9 @@ class PrepareLoopsFieldsForOutboxJob
       # Extract field name from key (format: "field_id/field_name")
       field_name = field_key.split("/", 2).last
 
-      # Skip if not a Loops field (must start with "Loops - " or "Loops - Override - ")
-      next unless field_name =~ /\ALoops\s*-\s*/i
+      # Skip if not a Loops field (must start with "Loops - ", "Loops - Override - ", or "Loops List - ")
+      is_loops_field = field_name.match?(/\ALoops\s*-\s*/i) || field_name.match?(/\ALoops\s+List\s*-\s*/i)
+      next unless is_loops_field
 
       # Extract field_id from key
       field_id = field_key.split("/", 2).first
@@ -131,6 +132,52 @@ class PrepareLoopsFieldsForOutboxJob
             derived_to_loops_field: "addressLastUpdatedAt"
           }
         end
+
+        next
+      end
+
+      # Check if this is a "Loops List - ..." field
+      list_match = field_name.match(/\ALoops\s+List\s*-\s*(.+)\z/i)
+
+      if list_match
+        # Handle mailing list fields
+        value = field_data["value"]
+        old_value = field_data["old_value"]
+        modified_at = field_data["modified_at"] || Time.current.iso8601
+
+        # Skip if value is blank
+        next if value.blank?
+
+        # Parse comma-separated list IDs
+        list_ids = value.to_s.split(",").map { |s| s.strip }.reject(&:blank?).uniq
+        next if list_ids.empty?
+
+        # Initialize or merge into mailingLists envelope entry
+        if envelope["mailingLists"]
+          # Merge with existing mailingLists
+          existing_value = envelope["mailingLists"][:value] || envelope["mailingLists"]["value"] || {}
+          existing_value = existing_value.dup if existing_value.is_a?(Hash)
+          list_ids.each { |id| existing_value[id] = true }
+          envelope["mailingLists"][:value] = existing_value
+        else
+          # Create new mailingLists entry
+          envelope["mailingLists"] = {
+            value: list_ids.index_with { true },
+            strategy: :override,
+            modified_at: modified_at
+          }
+        end
+
+        # Add provenance
+        provenance_fields << {
+          sync_source_field_id: field_id,
+          sync_source_field_name: field_name,
+          former_sync_source_value: old_value,
+          new_sync_source_value: value,
+          modified_at: modified_at,
+          derived_to_loops_field: "mailingLists",
+          mailing_list_ids: list_ids
+        }
 
         next
       end

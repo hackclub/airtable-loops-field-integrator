@@ -26,6 +26,10 @@ queues:
     every: ["1d"]
     class: "PruneLlmCacheWorker"
     queue: default
+  sync_loops_lists:
+    every: ["1h"]
+    class: "SyncLoopsListsWorker"
+    queue: default
 
 production:
   concurrency: 32

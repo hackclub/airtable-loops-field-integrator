@@ -550,5 +550,218 @@ module Pollers
       # Should NOT trigger full resync when types are the same
       assert_not fetch_all_called, "Should not trigger full resync when field types remain the same"
     end
+
+    test "triggers full resync when formula field formula changes" do
+      table_id = "tbl123"
+      base_id = "base123"
+
+      # Mock table with formula field
+      table = {
+        "id" => table_id,
+        "name" => "Test Table",
+        "fields" => [
+          { "id" => "fldEmail", "name" => "email", "type" => "email" },
+          { "id" => "fldLoops1", "name" => "Loops - fullName", "type" => "formula", "options" => { "formula" => "{firstName} & ' ' & {lastName}" } }
+        ]
+      }
+
+      email_field = { "id" => "fldEmail", "name" => "email", "type" => "email" }
+
+      # Existing metadata with different formula
+      @sync_source.update_columns(metadata: {
+        "known_loops_fields" => {
+          table_id => {
+            "fldLoops1/Loops - fullName" => "formula:{firstName} & {lastName}"
+          }
+        }
+      })
+
+      poller = Pollers::AirtableToLoops.new
+
+      # Mock fetch_records to track if fetch_all was called
+      fetch_all_called = false
+      poller.stub :fetch_records, ->(*args, **kwargs) {
+        fetch_all_called = kwargs[:fetch_all] || false
+        []
+      } do
+        poller.send(:process_table, @sync_source, base_id, table_id, table)
+      end
+
+      # Should trigger full resync when formula changes
+      assert fetch_all_called, "Should trigger full resync when formula changes"
+    end
+
+    test "stores formula in metadata for formula fields" do
+      table_id = "tbl123"
+      base_id = "base123"
+
+      # Mock table with formula field
+      table = {
+        "id" => table_id,
+        "name" => "Test Table",
+        "fields" => [
+          { "id" => "fldEmail", "name" => "email", "type" => "email" },
+          { "id" => "fldLoops1", "name" => "Loops - fullName", "type" => "formula", "options" => { "formula" => "{firstName} & ' ' & {lastName}" } }
+        ]
+      }
+
+      @sync_source.update_columns(metadata: {})
+
+      poller = Pollers::AirtableToLoops.new
+      poller.stub :fetch_records, [] do
+        poller.send(:process_table, @sync_source, base_id, table_id, table)
+      end
+
+      # Reload sync_source to get updated metadata
+      @sync_source.reload
+      metadata = @sync_source.metadata
+      known_fields = metadata["known_loops_fields"][table_id]
+
+      # Should store formula with "formula:" prefix
+      assert_equal "formula:{firstName} & ' ' & {lastName}", known_fields["fldLoops1/Loops - fullName"], "Should store formula text for formula fields"
+    end
+
+    test "formula field tracking works end-to-end" do
+      table_id = "tbl123"
+      base_id = "base123"
+
+      # First run: Process table with formula field
+      table1 = {
+        "id" => table_id,
+        "name" => "Test Table",
+        "fields" => [
+          { "id" => "fldEmail", "name" => "email", "type" => "email" },
+          { "id" => "fldLoops1", "name" => "Loops - fullName", "type" => "formula", "options" => { "formula" => "{firstName} & ' ' & {lastName}" } }
+        ]
+      }
+
+      @sync_source.update_columns(metadata: {})
+
+      poller = Pollers::AirtableToLoops.new
+      poller.stub :fetch_records, [] do
+        poller.send(:process_table, @sync_source, base_id, table_id, table1)
+      end
+
+      # Verify formula was stored
+      @sync_source.reload
+      metadata = @sync_source.metadata
+      known_fields = metadata["known_loops_fields"][table_id]
+      assert_equal "formula:{firstName} & ' ' & {lastName}", known_fields["fldLoops1/Loops - fullName"]
+
+      # Second run: Same formula - should NOT trigger full resync
+      fetch_all_called = false
+      poller.stub :fetch_records, ->(*args, **kwargs) {
+        fetch_all_called = kwargs[:fetch_all] || false
+        []
+      } do
+        poller.send(:process_table, @sync_source, base_id, table_id, table1)
+      end
+
+      assert_not fetch_all_called, "Should not trigger full resync when formula is unchanged"
+
+      # Third run: Formula changed - should trigger full resync
+      table2 = {
+        "id" => table_id,
+        "name" => "Test Table",
+        "fields" => [
+          { "id" => "fldEmail", "name" => "email", "type" => "email" },
+          { "id" => "fldLoops1", "name" => "Loops - fullName", "type" => "formula", "options" => { "formula" => "UPPER({firstName} & ' ' & {lastName})" } }
+        ]
+      }
+
+      fetch_all_called = false
+      poller.stub :fetch_records, ->(*args, **kwargs) {
+        fetch_all_called = kwargs[:fetch_all] || false
+        []
+      } do
+        poller.send(:process_table, @sync_source, base_id, table_id, table2)
+      end
+
+      assert fetch_all_called, "Should trigger full resync when formula changes"
+
+      # Verify new formula was stored
+      @sync_source.reload
+      metadata = @sync_source.metadata
+      known_fields = metadata["known_loops_fields"][table_id]
+      assert_equal "formula:UPPER({firstName} & ' ' & {lastName})", known_fields["fldLoops1/Loops - fullName"]
+    end
+
+    test "formula and regular fields work together" do
+      table_id = "tbl123"
+      base_id = "base123"
+
+      table = {
+        "id" => table_id,
+        "name" => "Test Table",
+        "fields" => [
+          { "id" => "fldEmail", "name" => "email", "type" => "email" },
+          { "id" => "fldLoops1", "name" => "Loops - firstName", "type" => "singleLineText" },
+          { "id" => "fldLoops2", "name" => "Loops - fullName", "type" => "formula", "options" => { "formula" => "{firstName} & ' ' & {lastName}" } }
+        ]
+      }
+
+      @sync_source.update_columns(metadata: {})
+
+      poller = Pollers::AirtableToLoops.new
+      poller.stub :fetch_records, [] do
+        poller.send(:process_table, @sync_source, base_id, table_id, table)
+      end
+
+      @sync_source.reload
+      metadata = @sync_source.metadata
+      known_fields = metadata["known_loops_fields"][table_id]
+
+      # Should store regular field type
+      assert_equal "singleLineText", known_fields["fldLoops1/Loops - firstName"]
+      # Should store formula with prefix
+      assert_equal "formula:{firstName} & ' ' & {lastName}", known_fields["fldLoops2/Loops - fullName"]
+    end
+
+    test "tracks loops_list_fields in metadata and detects type changes" do
+      table_id = "tbl123"
+      base_id = "base123"
+
+      table = {
+        "id" => table_id,
+        "name" => "Test Table",
+        "fields" => [
+          { "id" => "fldEmail", "name" => "email", "type" => "email" },
+          { "id" => "fldLoops1", "name" => "Loops List - Test List", "type" => "singleLineText" }
+        ]
+      }
+
+      @sync_source.update_columns(metadata: {})
+
+      poller = Pollers::AirtableToLoops.new
+      poller.stub :fetch_records, [] do
+        poller.send(:process_table, @sync_source, base_id, table_id, table)
+      end
+
+      # Verify loops_list_field was stored in metadata
+      @sync_source.reload
+      metadata = @sync_source.metadata
+      known_fields = metadata["known_loops_fields"][table_id]
+      assert_equal "singleLineText", known_fields["fldLoops1/Loops List - Test List"]
+
+      # Change field type - should trigger full resync
+      table2 = {
+        "id" => table_id,
+        "name" => "Test Table",
+        "fields" => [
+          { "id" => "fldEmail", "name" => "email", "type" => "email" },
+          { "id" => "fldLoops1", "name" => "Loops List - Test List", "type" => "multilineText" }
+        ]
+      }
+
+      fetch_all_called = false
+      poller.stub :fetch_records, ->(*args, **kwargs) {
+        fetch_all_called = kwargs[:fetch_all] || false
+        []
+      } do
+        poller.send(:process_table, @sync_source, base_id, table_id, table2)
+      end
+
+      assert fetch_all_called, "Should trigger full resync when loops_list_field type changes"
+    end
   end
 end
