@@ -3,5 +3,5 @@ require "ruby_llm/schema"
 
 RubyLLM.configure do |config|
   config.openai_api_key = ENV['OPENAI_API_KEY']
-  config.default_model = ENV.fetch('LLM_MODEL', 'gpt-5-mini')
+  config.default_model = ENV.fetch('LLM_MODEL', 'gpt-5')
 end

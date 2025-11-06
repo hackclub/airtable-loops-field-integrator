@@ -27,6 +27,13 @@ module Ai
       begin
         # Use RubyLLM with structured output
         chat = RubyLLM.chat.with_schema(schema_class)
+        
+        # Set reasoning parameters for GPT-5 models
+        model = RubyLLM.config.default_model
+        if model&.start_with?('gpt-5')
+          chat = chat.with_params(reasoning_effort: "minimal")
+        end
+        
         response = chat.ask(prompt)
 
         latency_ms = ((Time.current - start_time) * 1000).round
