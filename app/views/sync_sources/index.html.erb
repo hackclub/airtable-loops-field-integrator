@@ -124,9 +124,9 @@
 </style>
 
 <div class="nav">
-  <%= link_to "Email Audit Logs", emails_path, class: (request.path == emails_path ? "active" : "") %>
-  <%= link_to "Sync Sources", sync_sources_path, class: (request.path.start_with?("/sync_sources") ? "active" : "") %>
-  <%= link_to "Sidekiq", "/sidekiq", class: (request.path.start_with?("/sidekiq") ? "active" : "") %>
+  <%= link_to "Email Audit Logs", admin_emails_path, class: (request.path == admin_emails_path ? "active" : "") %>
+  <%= link_to "Sync Sources", admin_sync_sources_path, class: (request.path.start_with?("/admin/sync_sources") ? "active" : "") %>
+  <%= link_to "Sidekiq", "/admin/sidekiq", class: (request.path.start_with?("/admin/sidekiq") ? "active" : "") %>
 </div>
 
 <h1>Airtable Sync Sources</h1>
@@ -135,7 +135,7 @@
   <div class="error"><%= @error %></div>
 <% end %>
 
-<%= link_to "Create New Sync Source", new_sync_source_path, class: "btn-primary" %>
+<%= link_to "Create New Sync Source", new_admin_sync_source_path, class: "btn-primary" %>
 
 <% if @bases.any? %>
   <table>
@@ -200,15 +200,15 @@
           </td>
           <td class="actions">
             <% if sync_source %>
-              <%= link_to "View", sync_source_path(sync_source) %>
-              <%= link_to "Edit", edit_sync_source_path(sync_source) %>
-              <%= button_to "Delete", sync_source_path(sync_source), 
+              <%= link_to "View", admin_sync_source_path(sync_source) %>
+              <%= link_to "Edit", edit_admin_sync_source_path(sync_source) %>
+              <%= button_to "Delete", admin_sync_source_path(sync_source), 
                   method: :delete, 
                   data: { confirm: "Are you sure you want to delete this sync source?" }, 
                   class: "btn-danger",
                   style: "display: inline; padding: 0; border: none; background: none; color: #dc3545; text-decoration: underline; cursor: pointer; font-size: 14px; margin-left: 10px;" %>
             <% else %>
-              <%= link_to "Create", new_sync_source_path(base_id: base["id"]) %>
+              <%= link_to "Create", new_admin_sync_source_path(base_id: base["id"]) %>
             <% end %>
           </td>
         </tr>

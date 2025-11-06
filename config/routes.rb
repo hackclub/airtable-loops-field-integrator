@@ -5,20 +5,24 @@ Rails.application.routes.draw do
   # Can be used by load balancers and uptime monitors to verify that the app is live.
   get "up" => "rails/health#show", as: :rails_health_check
 
-  # Render dynamic PWA files from app/views/pwa/* (remember to link manifest in application.html.erb)
-  # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
-  # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
+  # Public home page
+  root "home#index"
 
-  # Sidekiq Web UI
-  require "sidekiq/web"
-  mount Sidekiq::Web => "/sidekiq"
+  # Admin routes (behind HTTP auth)
+  scope "/admin" do
+    # Admin root redirects to emails
+    get "", to: "admin#index", as: :admin_root
 
-  # Email audit log viewer
-  get "emails", to: "emails#index"
-  get "emails/*email", to: "emails#show", as: "email_audit_log", format: false
+    # Sidekiq Web UI with HTTP Basic Auth
+    require "sidekiq/web"
+    require_relative "../app/middleware/authenticated_sidekiq_web"
+    mount AuthenticatedSidekiqWeb.new => "/sidekiq"
 
-  # Sync sources management
-  resources :sync_sources
+    # Email audit log viewer
+    get "emails", to: "emails#index", as: :admin_emails
+    get "emails/*email", to: "emails#show", as: "admin_email_audit_log", format: false
 
-  root "emails#index"
+    # Sync sources management
+    resources :sync_sources, path: "sync_sources", as: "admin_sync_sources"
+  end
 end

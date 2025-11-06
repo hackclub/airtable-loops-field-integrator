@@ -132,12 +132,12 @@
 </style>
 
 <div class="nav">
-  <%= link_to "Email Audit Logs", emails_path, class: (request.path == emails_path ? "active" : "") %>
-  <%= link_to "Sync Sources", sync_sources_path, class: (request.path.start_with?("/sync_sources") ? "active" : "") %>
-  <%= link_to "Sidekiq", "/sidekiq", class: (request.path.start_with?("/sidekiq") ? "active" : "") %>
+  <%= link_to "Email Audit Logs", admin_emails_path, class: (request.path == admin_emails_path ? "active" : "") %>
+  <%= link_to "Sync Sources", admin_sync_sources_path, class: (request.path.start_with?("/admin/sync_sources") ? "active" : "") %>
+  <%= link_to "Sidekiq", "/admin/sidekiq", class: (request.path.start_with?("/admin/sidekiq") ? "active" : "") %>
 </div>
 
-<%= link_to "← Back", sync_sources_path, class: "back-link" %>
+<%= link_to "← Back", admin_sync_sources_path, class: "back-link" %>
 
 <h1>Edit Sync Source</h1>
 
@@ -152,7 +152,7 @@
   </div>
 <% end %>
 
-<%= form_with model: @sync_source, url: sync_source_path(@sync_source), local: true do |form| %>
+<%= form_with model: @sync_source, url: admin_sync_source_path(@sync_source), local: true do |form| %>
   <div class="form-group">
     <%= form.label :source_id, "Base ID" %>
     <%= form.text_field :source_id, readonly: true, style: "background-color: #f5f5f5;" %>
@@ -173,7 +173,7 @@
 
   <div class="form-actions">
     <%= form.submit "Update Sync Source", class: "btn btn-primary" %>
-    <%= link_to "Cancel", sync_sources_path, class: "btn btn-secondary" %>
+    <%= link_to "Cancel", admin_sync_sources_path, class: "btn btn-secondary" %>
   </div>
 <% end %>
 

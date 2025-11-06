@@ -59,9 +59,9 @@
 </style>
 
 <div class="nav">
-  <%= link_to "Email Audit Logs", emails_path, class: (request.path == emails_path ? "active" : "") %>
-  <%= link_to "Sync Sources", sync_sources_path, class: (request.path.start_with?("/sync_sources") ? "active" : "") %>
-  <%= link_to "Sidekiq", "/sidekiq", class: (request.path.start_with?("/sidekiq") ? "active" : "") %>
+  <%= link_to "Email Audit Logs", admin_emails_path, class: (request.path == admin_emails_path ? "active" : "") %>
+  <%= link_to "Sync Sources", admin_sync_sources_path, class: (request.path.start_with?("/admin/sync_sources") ? "active" : "") %>
+  <%= link_to "Sidekiq", "/admin/sidekiq", class: (request.path.start_with?("/admin/sidekiq") ? "active" : "") %>
 </div>
 
 <h1>Email Audit Logs</h1>
@@ -70,7 +70,7 @@
   <ul>
     <% @emails.each do |email| %>
       <li>
-        <%= link_to email, "/emails/#{ERB::Util.url_encode(email)}" %>
+        <%= link_to email, admin_email_audit_log_path(email) %>
       </li>
     <% end %>
   </ul>

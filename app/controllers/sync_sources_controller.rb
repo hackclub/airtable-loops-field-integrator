@@ -60,7 +60,7 @@ class SyncSourcesController < ApplicationController
     end
 
     if @sync_source.save
-      redirect_to sync_source_path(@sync_source), notice: "Sync source was successfully created."
+      redirect_to admin_sync_source_path(@sync_source), notice: "Sync source was successfully created."
     else
       begin
         @available_bases = AirtableService::Bases.find_each.to_a
@@ -77,7 +77,7 @@ class SyncSourcesController < ApplicationController
 
   def update
     if @sync_source.update(sync_source_params)
-      redirect_to sync_source_path(@sync_source), notice: "Sync source was successfully updated."
+      redirect_to admin_sync_source_path(@sync_source), notice: "Sync source was successfully updated."
     else
       render :edit, status: :unprocessable_entity
     end
@@ -85,7 +85,7 @@ class SyncSourcesController < ApplicationController
 
   def destroy
     @sync_source.destroy
-    redirect_to sync_sources_path, notice: "Sync source was successfully deleted."
+    redirect_to admin_sync_sources_path, notice: "Sync source was successfully deleted."
   end
 
   private
