@@ -32,7 +32,7 @@ queues:
     queue: default
 
 production:
-  concurrency: 64
+  concurrency: 128
 
 staging:
   concurrency: 5
