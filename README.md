@@ -17,14 +17,22 @@ Supported fields:
    
 # How to add properties to Loops contacts
 
+First, identify which properties you want to set in Loops. You should always do `programSignUpAt` at a minimum.
+
 It is better to create timestamped properties than boolean properties.
 
-- Create `highwaySignedUpAt -> timestamp` instead of `highwaySignedUp -> true/false`
+- Create `highwaySignUpAt -> timestamp` instead of `highwaySignUp -> true/false`
 - Create `hackatimeFirstHeartbeatReceivedAt -> timestamp` instead of `hackatimeReceivedHeartbeat -> true/false`.
 
 1. Create a field in your Airtable called `Loops - {eventName}` (must be lowerCamelCase, ex. `Loops - highwaySignedUpAt`). If you are running a YSWS, the event **MUST** be prefixed with your YSWS's name (the lowerCamelCase name of your program in the "YSWS Programs" table of the Unified YSWS Projects DB). Examples: `Athena Award -> athenaAward`, `Hackcraft Mod Edition -> hackcraftModEdition`, `Milkyway -> milkyway`.
 
 <img width="598" height="60" alt="Screenshot 2025-11-05 at 8 15 00 PM" src="https://github.com/user-attachments/assets/263d0994-a573-4916-9243-a7dd187c1b3f" />
+
+2. Verify that you table has a column called "Email" (case insenstiive)
+
+3. When you set a value to `Loops - toyboxSignUpAt`, it will automatically be picked up and synced to Loops. In most cases, it should happen in under 5 minutes.
+
+4. Recommendation: I recommend using `Created At` field types for fields like `Loops - toyboxSignUpAt`. If you have a field like `Project Name`, I recommend using Formula fields to sync that value to a field called `Loops - toyboxProjectName`.
 
 This is a project that automatically syncs fields from Airtable to Loops (Hack Club's email software). It uses a polling model and tries to intelligently decide when updates are needed and batch requests to cut down on API requests.
 
