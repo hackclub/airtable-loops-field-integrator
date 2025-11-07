@@ -32,30 +32,15 @@ It is better to create timestamped properties than boolean properties.
 
 3. When you set a value to `Loops - toyboxSignUpAt`, it will automatically be picked up and synced to Loops. In most cases, it should happen in under 5 minutes.
 
-4. Recommendation: I recommend using `Created At` field types for fields like `Loops - toyboxSignUpAt`. If you have a field like `Project Name`, I recommend using Formula fields to sync that value to a field called `Loops - toyboxProjectName`.
+4. Recommendation: I recommend using `Created time` field types for fields like `Loops - toyboxSignUpAt`. If you have a field like `Project Name`, I recommend using Formula fields to sync that value to a field called `Loops - toyboxProjectName` (instead of writing directly into the field).
 
 ![toyboxsubmittedat](https://github.com/user-attachments/assets/7179fe59-7208-469a-8843-20838af491f7)
 
 ![formulaexample](https://github.com/user-attachments/assets/963d5f2a-6505-4a0a-8eb7-b3f06f207fb3)
 
-
-This is a project that automatically syncs fields from Airtable to Loops (Hack Club's email software). It uses a polling model and tries to intelligently decide when updates are needed and batch requests to cut down on API requests.
-
 Currently supported:
 
 - Select specific Airtable bases to sync
-
-
-To-Do:
-
-- Mailing list support
-  - Subscribe to general mailing lists
-  - Subscribe to default mailing list
-- Re-subscribe support
-- Write-back to SyncSource with status so users can see success / error
-  - Maybe pull from envelopes? Show detailed errors
-- Once mailing list stuff is deployed, migrate all Zapiers over and disable Zapiers
-- For `LlmCache`, we probably don't need to store the full request. Hash is probably enough.
 
 ## Config
 
@@ -74,3 +59,10 @@ PROD_READONLY_DATABASE_URL=
 # must be set on 1 of the sidekiq workers. this will cause that worker to queue cron jobs
 SIDEKIQ_SCHEDULER=1
 ```
+
+## To-Do
+
+- Re-subscribe support (dangerous, needs to be implemented carefully)
+- Write-back to SyncSource with status so users can see success / error
+  - Maybe pull from envelopes? Show detailed errors
+- For `LlmCache`, we probably don't need to store the full request. Hash is probably enough.
