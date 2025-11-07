@@ -30,6 +30,14 @@ queues:
     every: ["1h"]
     class: "SyncLoopsListsWorker"
     queue: default
+  prune_otp_verifications:
+    every: ["1d"]
+    class: "PruneOtpVerificationsWorker"
+    queue: default
+  prune_authenticated_sessions:
+    every: ["1d"]
+    class: "PruneAuthenticatedSessionsWorker"
+    queue: default
 
 production:
   concurrency: 64

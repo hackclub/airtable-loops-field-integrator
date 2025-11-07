@@ -8,6 +8,16 @@ Rails.application.routes.draw do
   # Public home page
   root "home#index"
 
+  # Public auth routes
+  get "auth/otp/request", to: "auth#show_otp_request", as: :auth_otp_request
+  post "auth/otp/request", to: "auth#request_otp"
+  get "auth/otp/verify", to: "auth#show_verify_otp", as: :auth_otp_verify
+  post "auth/otp/verify", to: "auth#verify_otp"
+
+  # Profile update routes (require OTP auth, NOT admin auth)
+  get "profile/edit", to: "profile_update#edit", as: :profile_edit
+  patch "profile", to: "profile_update#update", as: :profile
+
   # Admin routes (behind HTTP auth)
   scope "/admin" do
     # Admin root redirects to emails

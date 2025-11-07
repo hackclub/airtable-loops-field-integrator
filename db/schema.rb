@@ -10,13 +10,25 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_11_05_213838) do
+ActiveRecord::Schema[8.0].define(version: 2025_11_07_023220) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
   # Custom types defined in this database.
   # Note that some types may not work with other database engines. Be careful if changing database.
   create_enum "loops_outbox_envelope_status", ["queued", "sent", "ignored_noop", "failed", "partially_sent"]
+
+  create_table "authenticated_sessions", force: :cascade do |t|
+    t.string "email_normalized", null: false
+    t.string "token", null: false
+    t.datetime "expires_at", precision: nil, null: false
+    t.datetime "created_at", precision: nil, null: false
+    t.datetime "updated_at", precision: nil, null: false
+    t.index ["email_normalized"], name: "index_authenticated_sessions_on_email_normalized"
+    t.index ["expires_at"], name: "index_authenticated_sessions_on_expires_at"
+    t.index ["token"], name: "index_authenticated_sessions_on_token"
+    t.unique_constraint ["token"], name: "authenticated_sessions_token_key"
+  end
 
   create_table "field_value_baselines", force: :cascade do |t|
     t.bigint "sync_source_id", null: false
@@ -56,7 +68,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_05_213838) do
     t.jsonb "former_sync_source_value"
     t.jsonb "new_sync_source_value"
     t.string "strategy"
-    t.bigint "sync_source_id", null: false
+    t.bigint "sync_source_id"
     t.string "sync_source_table_id"
     t.string "sync_source_record_id"
     t.string "sync_source_field_id"
@@ -64,8 +76,10 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_05_213838) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.jsonb "provenance", default: {}
+    t.boolean "is_self_service", default: false, null: false
     t.index ["email_normalized", "occurred_at"], name: "idx_on_email_normalized_occurred_at_4255605731"
     t.index ["email_normalized"], name: "index_loops_contact_change_audits_on_email_normalized"
+    t.index ["is_self_service"], name: "index_loops_contact_change_audits_on_is_self_service"
     t.index ["occurred_at"], name: "index_loops_contact_change_audits_on_occurred_at"
     t.index ["provenance"], name: "index_loops_contact_change_audits_on_provenance", using: :gin
     t.index ["sync_source_id"], name: "index_loops_contact_change_audits_on_sync_source_id"
@@ -117,6 +131,19 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_05_213838) do
     t.index ["email_normalized", "status"], name: "index_loops_outbox_envelopes_on_email_normalized_and_status"
     t.index ["status"], name: "index_loops_outbox_envelopes_on_status"
     t.index ["sync_source_id"], name: "index_loops_outbox_envelopes_on_sync_source_id"
+  end
+
+  create_table "otp_verifications", force: :cascade do |t|
+    t.string "email_normalized", null: false
+    t.string "code_hash", null: false
+    t.string "salt", null: false
+    t.datetime "expires_at", precision: nil, null: false
+    t.datetime "verified_at", precision: nil
+    t.integer "attempts", default: 0, null: false
+    t.datetime "created_at", precision: nil, null: false
+    t.datetime "updated_at", precision: nil, null: false
+    t.index ["email_normalized", "expires_at"], name: "index_otp_verifications_on_email_and_expires"
+    t.index ["expires_at"], name: "index_otp_verifications_on_expires_at"
   end
 
   create_table "sync_sources", force: :cascade do |t|

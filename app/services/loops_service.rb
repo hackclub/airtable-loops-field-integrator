@@ -113,6 +113,17 @@ class LoopsService
       make_request(:get, "#{API_URL}/lists")
     end
 
+    # Send transactional email
+    def send_transactional_email(email:, transactional_id:, data_variables: {})
+      email = EmailNormalizer.normalize(email)
+      body = {
+        transactionalId: transactional_id,
+        email: email,
+        dataVariables: data_variables
+      }
+      make_request(:post, "#{API_URL}/transactional", body: body)
+    end
+
     private
 
     # Public for testing purposes

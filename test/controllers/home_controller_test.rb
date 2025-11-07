@@ -4,7 +4,7 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
   test "should get index without authentication" do
     get root_url
     assert_response :success
-    assert_match(/hi/i, response.body)
+    assert_match(/Change profile information/i, response.body)
   end
 
   test "should not require authentication for root path" do
@@ -12,4 +12,5 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 end
+
 
