@@ -34,6 +34,9 @@ It is better to create timestamped properties than boolean properties.
 
 4. Recommendation: I recommend using `Created At` field types for fields like `Loops - toyboxSignUpAt`. If you have a field like `Project Name`, I recommend using Formula fields to sync that value to a field called `Loops - toyboxProjectName`.
 
+![toyboxsubmittedat](https://github.com/user-attachments/assets/7179fe59-7208-469a-8843-20838af491f7)
+
+
 This is a project that automatically syncs fields from Airtable to Loops (Hack Club's email software). It uses a polling model and tries to intelligently decide when updates are needed and batch requests to cut down on API requests.
 
 Currently supported:
