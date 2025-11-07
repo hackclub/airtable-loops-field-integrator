@@ -36,6 +36,8 @@ It is better to create timestamped properties than boolean properties.
 
 ![toyboxsubmittedat](https://github.com/user-attachments/assets/7179fe59-7208-469a-8843-20838af491f7)
 
+![formulaexample](https://github.com/user-attachments/assets/963d5f2a-6505-4a0a-8eb7-b3f06f207fb3)
+
 
 This is a project that automatically syncs fields from Airtable to Loops (Hack Club's email software). It uses a polling model and tries to intelligently decide when updates are needed and batch requests to cut down on API requests.
 
