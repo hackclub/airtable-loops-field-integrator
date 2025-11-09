@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# Generate a prompt.txt file with git diff and full codebase
+
+set -euo pipefail
+
+APP_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$APP_ROOT"
+
+PROMPT_FILE="$APP_ROOT/prompt.txt"
+TEMP_DIFF=$(mktemp)
+TEMP_PROMPT=$(mktemp)
+
+# Cleanup function
+cleanup() {
+  rm -f "$TEMP_DIFF" "$TEMP_PROMPT" "$TEMP_PROMPT.bak"
+}
+trap cleanup EXIT
+
+# Start with the header
+cat > "$TEMP_DIFF" << 'EOF'
+Find bugs / design flaws / code quality issues in my changes:
+
+
+
+EOF
+
+# Get all changes (staged + unstaged) in one diff
+git diff HEAD >> "$TEMP_DIFF" 2>/dev/null || true
+
+# Get untracked files and format them as diff additions
+UNTRACKED=$(git ls-files --others --exclude-standard)
+if [ -n "$UNTRACKED" ]; then
+  for file in $UNTRACKED; do
+    echo "" >> "$TEMP_DIFF"
+    echo "diff --git a/$file b/$file" >> "$TEMP_DIFF"
+    echo "new file mode 100644" >> "$TEMP_DIFF"
+    echo "index 0000000..$(git hash-object "$file" 2>/dev/null | cut -c1-7 2>/dev/null || echo "0000000")" >> "$TEMP_DIFF"
+    echo "--- /dev/null" >> "$TEMP_DIFF"
+    echo "+++ b/$file" >> "$TEMP_DIFF"
+    echo "@@ -0,0 +1,$(wc -l < "$file" 2>/dev/null || echo "0") @@" >> "$TEMP_DIFF"
+    # Add file content with + prefix
+    sed 's/^/+/' "$file" >> "$TEMP_DIFF" 2>/dev/null || echo "+$(cat "$file" 2>/dev/null || echo "(could not read file)")" >> "$TEMP_DIFF"
+  done
+fi
+
+# Generate full codebase using code2prompt to a temp file
+code2prompt . "$TEMP_PROMPT" \
+  --exclude "prompt.txt" \
+  --quiet 2>/dev/null || {
+  echo "Warning: code2prompt command failed, trying bin/code2prompt..." >&2
+  # Fallback: try running bin/code2prompt and capture its output
+  # Since bin/code2prompt writes to prompt.txt, we need to work around this
+  if [ -f "$PROMPT_FILE" ]; then
+    mv "$PROMPT_FILE" "$TEMP_PROMPT.bak"
+  fi
+  "$APP_ROOT/bin/code2prompt" >/dev/null 2>&1 || true
+  if [ -f "$PROMPT_FILE" ]; then
+    mv "$PROMPT_FILE" "$TEMP_PROMPT"
+    if [ -f "$TEMP_PROMPT.bak" ]; then
+      rm -f "$TEMP_PROMPT.bak"
+    fi
+  else
+    echo "(code2prompt output unavailable)" > "$TEMP_PROMPT"
+  fi
+}
+
+# Combine everything into prompt.txt
+cat "$TEMP_DIFF" > "$PROMPT_FILE"
+cat >> "$PROMPT_FILE" << 'EOF'
+
+Full code:
+
+
+
+EOF
+cat "$TEMP_PROMPT" >> "$PROMPT_FILE"
+
+echo "✓ Generated prompt.txt with git diff and full codebase"
+
