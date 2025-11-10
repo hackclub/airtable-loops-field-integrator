@@ -189,5 +189,96 @@ class AuthControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to auth_otp_verify_path
     assert_match(/Too many failed attempts/i, flash[:error])
   end
+
+  test "show_otp_request rejects absolute URLs in redirect_to parameter" do
+    # Test with external absolute URL
+    get auth_otp_request_path, params: { redirect_to: "https://evil.com/phishing" }
+    
+    # Should store safe fallback, not the malicious URL
+    assert_not_equal "https://evil.com/phishing", session[:redirect_after_auth]
+    assert_equal profile_edit_path, session[:redirect_after_auth]
+  end
+
+  test "show_otp_request accepts relative paths in redirect_to parameter" do
+    # Test with relative path
+    get auth_otp_request_path, params: { redirect_to: "/alts" }
+    
+    # Should store the relative path
+    assert_equal "/alts", session[:redirect_after_auth]
+  end
+
+  test "show_otp_request rejects protocol-relative URLs" do
+    # Test with protocol-relative URL (//evil.com)
+    get auth_otp_request_path, params: { redirect_to: "//evil.com/phishing" }
+    
+    # Should fallback to safe path
+    assert_equal profile_edit_path, session[:redirect_after_auth]
+  end
+
+  test "show_otp_request rejects URLs with host" do
+    # Test with URL that has host but no protocol
+    get auth_otp_request_path, params: { redirect_to: "evil.com/phishing" }
+    
+    # Should fallback to safe path
+    assert_equal profile_edit_path, session[:redirect_after_auth]
+  end
+
+  test "verify_otp prevents open redirect with absolute URL" do
+    # Set up OTP flow
+    code = AuthenticationService.generate_otp(@email)
+    
+    # Try to set malicious redirect through show_otp_request (will be sanitized)
+    get auth_otp_request_path, params: { redirect_to: "https://evil.com/phishing" }
+    # Should have stored safe fallback, not malicious URL
+    assert_equal profile_edit_path, session[:redirect_after_auth]
+    
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { code }) do
+        post auth_otp_request_path, params: { email: @email }
+      end
+    end
+    
+    # Verify OTP - should redirect to safe path, not malicious URL
+    post auth_otp_verify_path, params: { code: code }
+    
+    assert_redirected_to profile_edit_path
+    assert_not_equal "https://evil.com/phishing", @response.redirect_url
+  end
+
+  test "verify_otp allows relative paths" do
+    # Set up OTP flow
+    code = AuthenticationService.generate_otp(@email)
+    
+    # Store safe relative path
+    get auth_otp_request_path, params: { redirect_to: "/alts" }
+    
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { code }) do
+        post auth_otp_request_path, params: { email: @email }
+      end
+    end
+    
+    # Verify OTP - should redirect to the relative path
+    post auth_otp_verify_path, params: { code: code }
+    
+    assert_redirected_to "/alts"
+  end
+
+  test "show_otp_request redirects authenticated users safely" do
+    # Authenticate user first
+    code = AuthenticationService.generate_otp(@email)
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { code }) do
+        post auth_otp_request_path, params: { email: @email }
+      end
+      post auth_otp_verify_path, params: { code: code }
+    end
+    
+    # Try to set malicious redirect when accessing as authenticated user
+    # Should sanitize and redirect to safe path, not malicious URL
+    get auth_otp_request_path, params: { redirect_to: "https://evil.com/phishing" }
+    assert_redirected_to profile_edit_path
+    assert_not_equal "https://evil.com/phishing", @response.redirect_url
+  end
 end
 

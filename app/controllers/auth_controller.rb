@@ -7,10 +7,15 @@ class AuthController < ApplicationController
     email = AuthenticationService.validate_session(token)
     
     if email
-      # Already authenticated, redirect to profile edit
-      redirect_to profile_edit_path
+      # Already authenticated, redirect to intended destination or profile edit
+      destination = safe_path(session[:redirect_after_auth] || profile_edit_path)
+      session.delete(:redirect_after_auth)
+      redirect_to destination
       return
     end
+    
+    # Store redirect destination if provided
+    session[:redirect_after_auth] = safe_path(params[:redirect_to]) if params[:redirect_to].present?
     
     # Not authenticated, show OTP request form
   end
@@ -75,6 +80,9 @@ class AuthController < ApplicationController
     begin
       AuthenticationService.verify_otp(email, code)
 
+      # Store redirect destination before reset_session clears it
+      destination = safe_path(session[:redirect_after_auth] || profile_edit_path)
+
       # Rotate session to prevent fixation attacks
       reset_session
 
@@ -85,7 +93,7 @@ class AuthController < ApplicationController
       session[:auth_token] = token
 
       flash[:notice] = "Successfully authenticated!"
-      redirect_to profile_edit_path
+      redirect_to destination
     rescue AuthenticationService::InvalidOtp, AuthenticationService::OtpExpired, AuthenticationService::OtpAlreadyVerified => e
       flash[:error] = e.message
       redirect_to auth_otp_verify_path
@@ -94,6 +102,35 @@ class AuthController < ApplicationController
       flash[:error] = "Failed to verify OTP. Please try again."
       redirect_to auth_otp_verify_path
     end
+  end
+
+  private
+
+  def safe_path(path)
+    return profile_edit_path if path.blank?
+    
+    path_str = path.to_s.strip
+    
+    # Reject protocol-relative URLs (//evil.com)
+    return profile_edit_path if path_str.start_with?("//")
+    
+    # Reject absolute URLs with protocol (https://, http://, etc.)
+    return profile_edit_path if path_str.match?(/\A[a-z][a-z0-9+.-]*:/i)
+    
+    # Parse as URI to check for host component
+    uri = URI.parse(path_str) rescue nil
+    
+    # Reject if URI parsing failed
+    return profile_edit_path unless uri
+    
+    # Reject if URI has a host (absolute URL)
+    return profile_edit_path if uri.host.present?
+    
+    # Reject if path doesn't start with "/" (relative paths must start with /)
+    return profile_edit_path unless uri.path&.start_with?("/")
+    
+    # Accept relative paths that start with "/"
+    uri.to_s
   end
 end
 

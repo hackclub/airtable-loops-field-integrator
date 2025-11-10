@@ -21,13 +21,12 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_07_023220) do
   create_table "authenticated_sessions", force: :cascade do |t|
     t.string "email_normalized", null: false
     t.string "token", null: false
-    t.datetime "expires_at", precision: nil, null: false
-    t.datetime "created_at", precision: nil, null: false
-    t.datetime "updated_at", precision: nil, null: false
+    t.datetime "expires_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
     t.index ["email_normalized"], name: "index_authenticated_sessions_on_email_normalized"
     t.index ["expires_at"], name: "index_authenticated_sessions_on_expires_at"
-    t.index ["token"], name: "index_authenticated_sessions_on_token"
-    t.unique_constraint ["token"], name: "authenticated_sessions_token_key"
+    t.index ["token"], name: "index_authenticated_sessions_on_token", unique: true
   end
 
   create_table "field_value_baselines", force: :cascade do |t|
@@ -56,7 +55,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_07_023220) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["last_used_at"], name: "index_llm_caches_on_last_used_at"
-    t.index ["prompt_hash"], name: "index_llm_caches_on_cache_key", unique: true
+    t.index ["prompt_hash"], name: "index_llm_caches_on_prompt_hash", unique: true
   end
 
   create_table "loops_contact_change_audits", force: :cascade do |t|
@@ -136,13 +135,13 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_07_023220) do
   create_table "otp_verifications", force: :cascade do |t|
     t.string "email_normalized", null: false
     t.string "code_hash", null: false
-    t.string "salt", null: false
-    t.datetime "expires_at", precision: nil, null: false
-    t.datetime "verified_at", precision: nil
+    t.datetime "expires_at", null: false
+    t.datetime "verified_at"
     t.integer "attempts", default: 0, null: false
-    t.datetime "created_at", precision: nil, null: false
-    t.datetime "updated_at", precision: nil, null: false
-    t.index ["email_normalized", "expires_at"], name: "index_otp_verifications_on_email_and_expires"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "salt", null: false
+    t.index ["email_normalized", "expires_at"], name: "index_otp_verifications_on_email_normalized_and_expires_at"
     t.index ["expires_at"], name: "index_otp_verifications_on_expires_at"
   end
 
@@ -167,6 +166,5 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_07_023220) do
   end
 
   add_foreign_key "field_value_baselines", "sync_sources"
-  add_foreign_key "loops_contact_change_audits", "sync_sources"
   add_foreign_key "loops_outbox_envelopes", "sync_sources"
 end

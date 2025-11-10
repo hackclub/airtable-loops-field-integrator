@@ -37,4 +37,7 @@
   Manage your profile information and preferences.
 </p>
 
+<div style="display: flex; flex-direction: column; gap: 15px; align-items: center;">
 <%= link_to "Change profile information", auth_otp_request_path, class: "btn" %>
+  <%= link_to "Mass unsubscribe +alt emails", alts_path, class: "btn", style: "background-color: #6c757d;" %>
+</div>

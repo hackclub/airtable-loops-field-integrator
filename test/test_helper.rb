@@ -75,6 +75,17 @@ end
 
 require "rails/test_help"
 
+# Global safety net: Prevent accidental real email sends in tests
+# Individual tests should still stub LoopsService.send_transactional_email explicitly
+# when testing email behavior, but this prevents real emails if a test forgets to stub it
+if defined?(LoopsService)
+  LoopsService.define_singleton_method(:send_transactional_email) do |*args|
+    # In test environment, default to stubbing email sends to prevent real emails
+    # Tests can override this by explicitly stubbing the method (minitest stubs will take precedence)
+    { "success" => true, "test_stub" => true }
+  end
+end
+
 module ActiveSupport
   class TestCase
     # Run tests in parallel with specified workers

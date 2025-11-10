@@ -17,8 +17,10 @@ module Ai
     # @param prompt [String] The prompt to send to the LLM
     # @param schema_class [Class] RubyLLM schema class for structured output
     # @param temp [Float] Temperature for generation (default: 0)
+    # @param model [String] Optional model name (defaults to RubyLLM.config.default_model)
+    # @param reasoning_effort [String] Optional reasoning effort for GPT-5 models (e.g., "minimal", "high")
     # @return [Hash] Parsed structured data hash
-    def self.structured_generate(prompt:, schema_class:, temp: 0)
+    def self.structured_generate(prompt:, schema_class:, temp: 0, model: nil, reasoning_effort: nil)
       start_time = Time.current
 
       # Rate limit before making request
@@ -28,10 +30,21 @@ module Ai
         # Use RubyLLM with structured output
         chat = RubyLLM.chat.with_schema(schema_class)
         
+        # Use provided model or default
+        model_to_use = model || RubyLLM.config.default_model
+        
+        # Set model if provided
+        if model
+          chat = chat.with_model(model)
+        end
+        
+        # Set temperature
+        chat = chat.with_temperature(temp)
+        
         # Set reasoning parameters for GPT-5 models
-        model = RubyLLM.config.default_model
-        if model&.start_with?('gpt-5')
-          chat = chat.with_params(reasoning_effort: "minimal")
+        if model_to_use&.start_with?('gpt-5')
+          effort = reasoning_effort || "minimal"
+          chat = chat.with_params(reasoning_effort: effort)
         end
         
         response = chat.ask(prompt)
@@ -41,7 +54,8 @@ module Ai
         parsed_data = response.content
 
         Rails.logger.info(
-          "Ai::Client.structured_generate: model=#{RubyLLM.config.default_model}, " \
+          "Ai::Client.structured_generate: model=#{model_to_use}, " \
+          "temp=#{temp}, " \
           "latency_ms=#{latency_ms}, cache=miss"
         )
 

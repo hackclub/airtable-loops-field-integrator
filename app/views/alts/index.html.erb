@@ -1,0 +1,83 @@
+<% content_for :title, "Mass Unsubscribe +Alt Emails" %>
+
+<style>
+  /* Using styles from profile_update/edit.html.erb for consistency */
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    max-width: 600px;
+    margin: 50px auto;
+    padding: 20px;
+    line-height: 1.6;
+  }
+  h1 { color: #333; margin-bottom: 30px; }
+  .btn {
+    padding: 12px 24px; border: none; border-radius: 4px; font-weight: 500;
+    cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; width: 100%;
+  }
+  .btn-danger { background-color: #dc3545; color: #fff; }
+  .btn-danger:hover { background-color: #c82333; }
+  .alert { padding: 12px; border-radius: 4px; margin-bottom: 20px; }
+  .alert-notice { background-color: #d4edda; color: #155724; border-left: 4px solid #28a745; }
+  .alert-error { background-color: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
+  .alt-list { list-style: none; padding: 0; margin: 20px 0; }
+  .alt-list li { background-color: #f8f9fa; padding: 8px 12px; border-radius: 4px; margin-bottom: 8px; font-family: monospace; }
+  .info-box { background-color: #e9ecef; color: #495057; padding: 15px; border-radius: 4px; font-size: 14px; margin-top: 30px; }
+</style>
+
+<h1>Mass Unsubscribe +Alt Emails</h1>
+
+<% if flash[:notice] %>
+  <div class="alert alert-notice"><%= flash[:notice] %></div>
+<% end %>
+<% if flash[:error] %>
+  <div class="alert alert-error"><%= flash[:error] %></div>
+<% end %>
+
+<div class="info-box" style="margin-bottom: 30px;">
+  <p style="margin-top: 0;"><strong>What are +alt emails?</strong></p>
+  <p style="margin-bottom: 0;">Many email providers including Gmail let you "use" multiple emails like <code>zach+hcb@hackclub.com</code> and <code>zach+slack@hackclub.com</code> that all go to <code>zach@hackclub.com</code>.</p>
+  <p style="margin-top: 15px; margin-bottom: 0;">This tool finds any +alt accounts associated with your email and lets you quickly unsubscribe them. It's helpful for removing test accounts and not getting a million emails whenever an announcement goes out.</p>
+</div>
+
+<p>Your primary email is <strong><%= @email %></strong>. It will not be unsubscribed.</p>
+
+<% subscribed_alts = @alts[:subscribed] || [] %>
+<% unsubscribed_alts = @alts[:unsubscribed] || [] %>
+
+<% if subscribed_alts.any? %>
+  <p>We found the following subscribed +alt emails linked to your account. You can unsubscribe all of them to consolidate your contact information under your primary email.</p>
+
+  <ul class="alt-list">
+    <% subscribed_alts.each do |alt| %>
+      <li><%= alt %></li>
+    <% end %>
+  </ul>
+
+  <%= form_with url: alts_unsubscribe_path, method: :post, data: { confirm: "Are you sure you want to unsubscribe these #{subscribed_alts.count} +alt email(s)? This will merge their data into your primary email and cannot be undone." } do |form| %>
+    <% subscribed_alts.each do |alt| %>
+      <%= hidden_field_tag 'alts[]', alt %>
+    <% end %>
+    <%= form.submit "Merge & Unsubscribe All +Alt Emails", class: "btn btn-danger" %>
+  <% end %>
+<% else %>
+  <p>We did not find any subscribed +alt emails for your account.</p>
+<% end %>
+
+<% if unsubscribed_alts.any? %>
+  <div style="margin-top: 40px;">
+    <h2 style="font-size: 20px; margin-bottom: 15px;">Already Unsubscribed +Alt Emails</h2>
+    <p>The following +alt emails have already been unsubscribed:</p>
+    <ul class="alt-list" style="opacity: 0.7;">
+      <% unsubscribed_alts.each do |alt| %>
+        <li><%= alt %></li>
+      <% end %>
+    </ul>
+  </div>
+<% end %>
+
+<div class="info-box">
+  <strong>Note:</strong> Unsubscribes are effective immediately in our mailing system. However, it may take up to 24 hours for the changes to be reflected on this page.
+</div>
+
+
+

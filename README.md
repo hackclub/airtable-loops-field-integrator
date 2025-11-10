@@ -45,16 +45,22 @@ Currently supported:
 ## Config
 
 ```
-# airtable token with access to whatever bases you want it to poll
+# required - airtable token with access to whatever bases you want it to poll
 AIRTABLE_PERSONAL_ACCESS_TOKEN=
-# for updating loops contacts
+# required - for updating loops contacts
 LOOPS_API_KEY=
-# for splitting addresses and full names into individual parts
+# required - for splitting addresses and full names into individual parts, and for alt unsubscribe contact merging
 OPENAI_API_KEY=
 # optional - ID of the mailing list to automatically add all new contacts to, ex. "Announcements"
 DEFAULT_LOOPS_LIST_ID=
 # optional - URL of a readonly user to the prod database for easier debugging
 PROD_READONLY_DATABASE_URL=
+# URL for the read-only warehouse database containing the loops.audience table
+WAREHOUSE_LOOPS_AUDIENCE_READONLY_URL=
+# required - Transactional email ID for sending alt unsubscribe results
+LOOPS_ALT_UNSUBSCRIBE_RESULTS_TRANSACTIONAL_ID=
+# required - Transactional email ID for sending OTP codes
+LOOPS_OTP_TRANSACTIONAL_ID=
 
 # must be set on 1 of the sidekiq workers. this will cause that worker to queue cron jobs
 SIDEKIQ_SCHEDULER=1
