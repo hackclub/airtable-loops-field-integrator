@@ -27,14 +27,27 @@ class ApplicationController < ActionController::Base
     email = AuthenticationService.validate_session(token)
 
     unless email
-      flash[:error] = "Please authenticate to continue"
       # Preserve the current path as redirect destination after authentication
       session[:redirect_after_auth] = request.path
+      # Set auth purpose based on current path for context-aware UI
+      set_auth_purpose_from_path(request.path)
       redirect_to auth_otp_request_path
       return
     end
 
     @current_authenticated_email = email
+  end
+
+  protected
+
+  def set_auth_purpose_from_path(path)
+    return if path.blank?
+
+    if path == alts_path
+      session[:auth_purpose] = "mass_unsubscribe"
+    elsif path == profile_edit_path
+      session[:auth_purpose] = "profile_update"
+    end
   end
 
   def current_authenticated_email

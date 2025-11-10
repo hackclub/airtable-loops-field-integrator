@@ -1,10 +1,515 @@
 /*
- * This is a manifest file that'll be compiled into application.css.
- *
- * With Propshaft, assets are served efficiently without preprocessing steps. You can still include
- * application-wide styles in this file, but keep in mind that CSS precedence will follow the standard
- * cascading order, meaning styles declared later in the document or manifest will override earlier ones,
- * depending on specificity.
- *
- * Consider organizing styles into separate files for maintainability.
+ * Hack Club Brand Stylesheet
+ * Based on hackclub.com/brand and theme.hackclub.com
  */
+
+/* Phantom Sans Font */
+@font-face {
+  font-family: 'Phantom Sans';
+  src: url('https://assets.hackclub.com/fonts/Phantom_Sans_0.7/Regular.woff2') format('woff2'),
+       url('https://assets.hackclub.com/fonts/Phantom_Sans_0.7/Regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Phantom Sans';
+  src: url('https://assets.hackclub.com/fonts/Phantom_Sans_0.7/Bold.woff2') format('woff2'),
+       url('https://assets.hackclub.com/fonts/Phantom_Sans_0.7/Bold.woff') format('woff');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* CSS Variables for Hack Club Colors */
+:root {
+  /* Brand Colors */
+  --hc-red: #ec3750;
+  --hc-red-dark: #d6283a;
+  --hc-orange: #ff8c37;
+  --hc-yellow: #f1c40f;
+  --hc-green: #33d6a6;
+  --hc-cyan: #5bc0de;
+  --hc-blue: #338eda;
+  --hc-purple: #a633d6;
+  --hc-muted: #8492a6;
+  
+  /* Neutral Colors */
+  --hc-darker: #121217;
+  --hc-dark: #17171d;
+  --hc-darkless: #252429;
+  --hc-black: #1f2d3d;
+  --hc-steel: #273444;
+  --hc-slate: #3c4858;
+  --hc-smoke: #e0e6ed;
+  --hc-snow: #f9fafc;
+  --hc-white: #ffffff;
+  
+  /* Semantic Colors */
+  --hc-text: #1f2d3d;
+  --hc-background: #ffffff;
+  --hc-elevated: #ffffff;
+  --hc-sheet: #f9fafc;
+  --hc-sunken: #e0e6ed;
+  --hc-border: #e0e6ed;
+  --hc-placeholder: #8492a6;
+  --hc-secondary: #3c4858;
+  --hc-primary: #ec3750;
+  --hc-accent: #338eda;
+  
+  /* Spacing */
+  --hc-space-xs: 4px;
+  --hc-space-sm: 8px;
+  --hc-space-md: 16px;
+  --hc-space-lg: 32px;
+  --hc-space-xl: 64px;
+  
+  /* Border Radius */
+  --hc-radius-sm: 4px;
+  --hc-radius-md: 8px;
+  --hc-radius-lg: 12px;
+  --hc-radius-xl: 16px;
+  --hc-radius-circle: 99999px;
+  
+  /* Shadows */
+  --hc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.0625), 0 2px 4px rgba(0, 0, 0, 0.0625);
+  --hc-shadow-md: 0 4px 8px rgba(0, 0, 0, 0.125);
+  --hc-shadow-lg: 0 1px 2px rgba(0, 0, 0, 0.0625), 0 8px 12px rgba(0, 0, 0, 0.125);
+}
+
+/* Base Styles */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: "Phantom Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--hc-text);
+  background-color: var(--hc-background);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  text-rendering: optimizeLegibility;
+  padding-top: 100px; /* Space for Hack Club banner */
+}
+
+/* Hack Club Banner Styling */
+a#hackclub-banner {
+  position: fixed;
+  top: 0;
+  left: 16px;
+  z-index: 999;
+  display: block;
+  width: 256px;
+  border: 0;
+  transition: transform 0.2s ease;
+}
+
+a#hackclub-banner:hover {
+  transform: scale(1.02);
+}
+
+a#hackclub-banner img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+@media (max-width: 640px) {
+  body {
+    padding-top: 70px; /* Smaller banner on mobile */
+  }
+  
+  a#hackclub-banner {
+    width: 180px !important;
+    left: 12px; /* Slightly less offset on mobile */
+  }
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-family: "Phantom Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-weight: 700;
+  line-height: 1.125;
+  letter-spacing: -0.009em;
+  margin: 0;
+  color: var(--hc-text);
+}
+
+h1 {
+  font-size: clamp(2rem, 5vw, 3rem);
+  margin-bottom: var(--hc-space-lg);
+  margin-top: 0;
+}
+
+h2 {
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  margin-bottom: var(--hc-space-md);
+  margin-top: var(--hc-space-lg);
+}
+
+h3 {
+  font-size: clamp(1.25rem, 3vw, 1.5rem);
+  margin-bottom: var(--hc-space-md);
+  margin-top: var(--hc-space-md);
+}
+
+p {
+  margin: var(--hc-space-md) 0;
+  color: var(--hc-text);
+  line-height: 1.5;
+}
+
+a {
+  color: var(--hc-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.0925em;
+  transition: text-decoration-style 0.2s;
+}
+
+a:hover, a:focus {
+  text-decoration-style: wavy;
+}
+
+strong {
+  font-weight: 700;
+}
+
+code {
+  font-family: "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background-color: var(--hc-sunken);
+  color: var(--hc-accent);
+  padding: 2px 6px;
+  border-radius: var(--hc-radius-sm);
+}
+
+/* Layout */
+.container {
+  max-width: 680px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--hc-space-xl) var(--hc-space-md) var(--hc-space-lg);
+}
+
+.container-narrow {
+  max-width: 512px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--hc-space-xl) var(--hc-space-md) var(--hc-space-lg);
+}
+
+.container-wide {
+  max-width: 1024px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--hc-space-xl) var(--hc-space-md) var(--hc-space-lg);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 24px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.009em;
+  color: var(--hc-white);
+  background-color: var(--hc-primary);
+  border: none;
+  border-radius: var(--hc-radius-circle);
+  cursor: pointer;
+  text-decoration: none;
+  box-shadow: var(--hc-shadow-md);
+  transition: transform 0.125s ease-in-out, box-shadow 0.125s ease-in-out;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn:hover, .btn:focus {
+  transform: scale(1.0625);
+  box-shadow: var(--hc-shadow-lg);
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn-lg {
+  font-size: 20px;
+  padding: 16px 32px;
+  line-height: 1;
+}
+
+.btn-outline {
+  background-color: transparent;
+  color: var(--hc-primary);
+  border: 2px solid currentColor;
+}
+
+.btn-outline:hover, .btn-outline:focus {
+  background-color: var(--hc-primary);
+  color: var(--hc-white);
+}
+
+.btn-secondary {
+  background-color: var(--hc-secondary);
+}
+
+.btn-secondary:hover, .btn-secondary:focus {
+  background-color: var(--hc-slate);
+}
+
+.btn-danger {
+  background-color: var(--hc-red);
+}
+
+.btn-danger:hover, .btn-danger:focus {
+  background-color: var(--hc-red-dark);
+}
+
+.btn-full {
+  width: 100%;
+}
+
+/* Cards */
+.card {
+  background-color: var(--hc-elevated);
+  color: var(--hc-text);
+  padding: var(--hc-space-lg);
+  border-radius: var(--hc-radius-lg);
+  box-shadow: var(--hc-shadow-md);
+  overflow: hidden;
+}
+
+.card-sunken {
+  background-color: var(--hc-sunken);
+  padding: var(--hc-space-lg);
+  border-radius: var(--hc-radius-lg);
+}
+
+/* Forms */
+.form-group {
+  margin-bottom: var(--hc-space-md);
+}
+
+.form-group-row {
+  display: flex;
+  gap: var(--hc-space-md);
+  margin-bottom: var(--hc-space-md);
+}
+
+.form-group-half {
+  flex: 1;
+}
+
+.form-group-third {
+  flex: 1;
+}
+
+label {
+  display: block;
+  margin-bottom: var(--hc-space-xs);
+  font-weight: 500;
+  color: var(--hc-text);
+  font-size: 14px;
+  line-height: 1.375;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="date"],
+input[type="number"],
+select,
+textarea {
+  width: 100%;
+  padding: 12px 16px;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--hc-text);
+  background-color: var(--hc-elevated);
+  border: 1px solid var(--hc-border);
+  border-radius: var(--hc-radius-md);
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+  box-shadow: var(--hc-shadow-sm);
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--hc-slate);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--hc-primary);
+  box-shadow: 0 0 0 3px rgba(236, 55, 80, 0.15), var(--hc-shadow-sm);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--hc-placeholder);
+}
+
+textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+/* OTP Input Field Styling */
+input.otp-code {
+  font-size: 24px;
+  text-align: center;
+  letter-spacing: 8px;
+  font-family: "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+}
+
+.form-actions {
+  margin-top: var(--hc-space-lg);
+  display: flex;
+  gap: var(--hc-space-sm);
+}
+
+.form-actions .btn {
+  flex: 1;
+}
+
+.help-text {
+  font-size: 13px;
+  color: var(--hc-muted);
+  margin-top: var(--hc-space-xs);
+}
+
+/* Alerts */
+.alert {
+  padding: var(--hc-space-md);
+  border-radius: var(--hc-radius-md);
+  margin-bottom: var(--hc-space-md);
+  font-weight: 400;
+  box-shadow: var(--hc-shadow-sm);
+}
+
+.alert-notice {
+  background-color: var(--hc-green);
+  color: var(--hc-white);
+}
+
+.alert-error {
+  background-color: var(--hc-red);
+  color: var(--hc-white);
+}
+
+.alert-warning {
+  background-color: var(--hc-orange);
+  color: var(--hc-white);
+}
+
+/* Lists */
+.alt-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--hc-space-md) 0;
+}
+
+.alt-list li {
+  background-color: var(--hc-sheet);
+  padding: var(--hc-space-sm) var(--hc-space-md);
+  border-radius: var(--hc-radius-md);
+  margin-bottom: var(--hc-space-sm);
+  font-family: "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  font-size: 14px;
+}
+
+/* Info Box */
+.info-box {
+  background-color: var(--hc-sheet);
+  color: var(--hc-secondary);
+  padding: var(--hc-space-md);
+  border-radius: var(--hc-radius-md);
+  font-size: 14px;
+  margin-top: var(--hc-space-lg);
+}
+
+.info-box p {
+  margin: var(--hc-space-sm) 0;
+  color: var(--hc-secondary);
+}
+
+.info-box p:first-child {
+  margin-top: 0;
+}
+
+.info-box p:last-child {
+  margin-bottom: 0;
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  margin-top: var(--hc-space-xl);
+  padding-top: var(--hc-space-md);
+  border-top: 1px solid var(--hc-border);
+  color: var(--hc-muted);
+  font-size: 14px;
+}
+
+.footer a {
+  color: var(--hc-primary);
+  text-decoration: none;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+}
+
+/* Utilities */
+.text-center {
+  text-align: center;
+}
+
+.text-muted {
+  color: var(--hc-muted);
+}
+
+.mt-0 { margin-top: 0; }
+.mb-0 { margin-bottom: 0; }
+.mt-md { margin-top: var(--hc-space-md); }
+.mb-md { margin-bottom: var(--hc-space-md); }
+.mt-lg { margin-top: var(--hc-space-lg); }
+.mb-lg { margin-bottom: var(--hc-space-lg); }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .container,
+  .container-narrow,
+  .container-wide {
+    padding: var(--hc-space-md);
+  }
+  
+  .form-group-row {
+    flex-direction: column;
+    gap: 0;
+  }
+  
+  .form-actions {
+    flex-direction: column;
+  }
+  
+  .form-actions .btn {
+    width: 100%;
+  }
+}

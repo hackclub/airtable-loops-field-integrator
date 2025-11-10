@@ -11,12 +11,26 @@ class AuthController < ApplicationController
       # Already authenticated, redirect to intended destination or profile edit
       destination = safe_path(session[:redirect_after_auth] || profile_edit_path)
       session.delete(:redirect_after_auth)
+      session.delete(:auth_purpose)
       redirect_to destination
       return
     end
     
     # Store redirect destination if provided
-    session[:redirect_after_auth] = safe_path(params[:redirect_to]) if params[:redirect_to].present?
+    if params[:redirect_to].present?
+      session[:redirect_after_auth] = safe_path(params[:redirect_to])
+    end
+    
+    # Store auth purpose based on redirect destination for context-aware UI
+    # Only set if not already set (e.g., from require_authenticated_session)
+    unless session[:auth_purpose].present?
+      redirect_path = session[:redirect_after_auth]
+      set_auth_purpose_from_path(redirect_path)
+      # Default to profile_update if no redirect path and no redirect_to param
+      if session[:auth_purpose].blank? && params[:redirect_to].blank?
+        session[:auth_purpose] = "profile_update"
+      end
+    end
     
     # Not authenticated, show OTP request form
   end

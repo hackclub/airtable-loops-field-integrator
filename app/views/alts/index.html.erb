@@ -1,30 +1,7 @@
 <% content_for :title, "Mass Unsubscribe +Alt Emails" %>
 
-<style>
-  /* Using styles from profile_update/edit.html.erb for consistency */
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    max-width: 600px;
-    margin: 50px auto;
-    padding: 20px;
-    line-height: 1.6;
-  }
-  h1 { color: #333; margin-bottom: 30px; }
-  .btn {
-    padding: 12px 24px; border: none; border-radius: 4px; font-weight: 500;
-    cursor: pointer; text-decoration: none; display: inline-block; font-size: 16px; width: 100%;
-  }
-  .btn-danger { background-color: #dc3545; color: #fff; }
-  .btn-danger:hover { background-color: #c82333; }
-  .alert { padding: 12px; border-radius: 4px; margin-bottom: 20px; }
-  .alert-notice { background-color: #d4edda; color: #155724; border-left: 4px solid #28a745; }
-  .alert-error { background-color: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
-  .alt-list { list-style: none; padding: 0; margin: 20px 0; }
-  .alt-list li { background-color: #f8f9fa; padding: 8px 12px; border-radius: 4px; margin-bottom: 8px; font-family: monospace; }
-  .info-box { background-color: #e9ecef; color: #495057; padding: 15px; border-radius: 4px; font-size: 14px; margin-top: 30px; }
-</style>
-
-<h1>Mass Unsubscribe +Alt Emails</h1>
+<div class="container">
+  <h1>Mass Unsubscribe +Alt Emails</h1>
 
 <% if flash[:notice] %>
   <div class="alert alert-notice"><%= flash[:notice] %></div>
@@ -57,15 +34,15 @@
     <% subscribed_alts.each do |alt| %>
       <%= hidden_field_tag 'alts[]', alt %>
     <% end %>
-    <%= form.submit "Merge & Unsubscribe All +Alt Emails", class: "btn btn-danger" %>
+    <%= form.submit "Merge & Unsubscribe All +Alt Emails", class: "btn btn-danger btn-full" %>
   <% end %>
 <% else %>
   <p>We did not find any subscribed +alt emails for your account.</p>
 <% end %>
 
 <% if unsubscribed_alts.any? %>
-  <div style="margin-top: 40px;">
-    <h2 style="font-size: 20px; margin-bottom: 15px;">Already Unsubscribed +Alt Emails</h2>
+  <div style="margin-top: 64px;">
+    <h2 style="font-size: 20px; margin-bottom: 16px;">Already Unsubscribed +Alt Emails</h2>
     <p>The following +alt emails have already been unsubscribed:</p>
     <ul class="alt-list" style="opacity: 0.7;">
       <% unsubscribed_alts.each do |alt| %>
@@ -80,4 +57,4 @@
 </div>
 
 <%= render "shared/authenticated_footer" %>
-
+</div>

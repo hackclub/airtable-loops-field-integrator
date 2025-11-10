@@ -169,7 +169,6 @@ class ProfileUpdateControllerTest < ActionDispatch::IntegrationTest
   test "edit requires authentication" do
     get profile_edit_path
     assert_redirected_to auth_otp_request_path
-    assert_equal "Please authenticate to continue", flash[:error]
   end
 
   test "update requires authentication" do

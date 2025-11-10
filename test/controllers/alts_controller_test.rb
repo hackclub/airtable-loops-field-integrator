@@ -43,7 +43,6 @@ class AltsControllerTest < ActionDispatch::IntegrationTest
   test "index requires authentication" do
     get alts_path
     assert_redirected_to auth_otp_request_path
-    assert_equal "Please authenticate to continue", flash[:error]
   end
 
   test "index shows found subscribed alt emails" do

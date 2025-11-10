@@ -1,95 +1,33 @@
 <% content_for :title, "Request OTP" %>
 
-<style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    max-width: 500px;
-    margin: 50px auto;
-    padding: 20px;
-    line-height: 1.6;
-  }
-  h1 {
-    color: #333;
-    margin-bottom: 30px;
-  }
-  .form-group {
-    margin-bottom: 20px;
-  }
-  label {
-    display: block;
-    margin-bottom: 6px;
-    font-weight: 500;
-    color: #333;
-  }
-  input[type="email"] {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 16px;
-    font-family: inherit;
-    box-sizing: border-box;
-  }
-  .form-actions {
-    margin-top: 30px;
-  }
-  .btn {
-    padding: 12px 24px;
-    border: none;
-    border-radius: 4px;
-    font-weight: 500;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-block;
-    font-size: 16px;
-    width: 100%;
-  }
-  .btn-primary {
-    background-color: #007bff;
-    color: #fff;
-  }
-  .btn-primary:hover {
-    background-color: #0056b3;
-  }
-  .alert {
-    padding: 12px;
-    border-radius: 4px;
-    margin-bottom: 20px;
-  }
-  .alert-notice {
-    background-color: #d4edda;
-    color: #155724;
-    border-left: 4px solid #28a745;
-  }
-  .alert-error {
-    background-color: #f8d7da;
-    color: #721c24;
-    border-left: 4px solid #dc3545;
-  }
-</style>
+<div class="container-narrow">
+  <% if session[:auth_purpose] == "mass_unsubscribe" %>
+    <h1>Mass Unsubscribe +Alt Emails</h1>
+  <% else %>
+    <h1>Change Profile Information</h1>
+  <% end %>
 
-<h1>Change Profile Information</h1>
+  <% if flash[:notice] %>
+    <div class="alert alert-notice"><%= flash[:notice] %></div>
+  <% end %>
 
-<% if flash[:notice] %>
-  <div class="alert alert-notice"><%= flash[:notice] %></div>
-<% end %>
+  <% if flash[:error] %>
+    <div class="alert alert-error"><%= flash[:error] %></div>
+  <% end %>
 
-<% if flash[:error] %>
-  <div class="alert alert-error"><%= flash[:error] %></div>
-<% end %>
+  <%= form_with url: auth_otp_request_path, method: :post, local: true do |form| %>
+    <div class="form-group">
+      <%= form.label :email, "Email Address" %>
+      <%= form.email_field :email, required: true, autofocus: true, placeholder: "your@email.com" %>
+    </div>
 
-<%= form_with url: auth_otp_request_path, method: :post, local: true do |form| %>
-  <div class="form-group">
-    <%= form.label :email, "Email Address" %>
-    <%= form.email_field :email, required: true, autofocus: true, placeholder: "your@email.com" %>
-  </div>
+    <div class="form-actions">
+      <%= form.submit "Send OTP Code", class: "btn btn-full" %>
+    </div>
+  <% end %>
 
-  <div class="form-actions">
-    <%= form.submit "Send OTP Code", class: "btn btn-primary" %>
-  </div>
-<% end %>
-
-<p style="margin-top: 30px; color: #666; font-size: 14px;">
-  We'll send a one-time password (OTP) to your email address to verify your identity.
-</p>
+  <p class="text-muted" style="margin-top: 32px; font-size: 14px;">
+    We'll send a one-time password (OTP) to your email address to verify your identity.
+  </p>
+</div>
 

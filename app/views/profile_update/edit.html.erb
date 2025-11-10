@@ -1,110 +1,7 @@
 <% content_for :title, "Edit Profile" %>
 
-<style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    max-width: 600px;
-    margin: 50px auto;
-    padding: 20px;
-    line-height: 1.6;
-  }
-  h1 {
-    color: #333;
-    margin-bottom: 30px;
-  }
-  .form-group {
-    margin-bottom: 20px;
-  }
-  .form-group-row {
-    display: flex;
-    gap: 15px;
-    margin-bottom: 20px;
-  }
-  .form-group-half {
-    flex: 1;
-  }
-  .form-group-third {
-    flex: 1;
-  }
-  .form-group-half .form-group,
-  .form-group-third .form-group {
-    margin-bottom: 0;
-  }
-  label {
-    display: block;
-    margin-bottom: 6px;
-    font-weight: 500;
-    color: #333;
-  }
-  input[type="text"],
-  input[type="date"],
-  select,
-  textarea {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    font-size: 16px;
-    font-family: inherit;
-    box-sizing: border-box;
-  }
-  textarea {
-    min-height: 100px;
-    resize: vertical;
-  }
-  .form-actions {
-    margin-top: 30px;
-    display: flex;
-    gap: 10px;
-  }
-  .btn {
-    padding: 12px 24px;
-    border: none;
-    border-radius: 4px;
-    font-weight: 500;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-block;
-    font-size: 16px;
-    flex: 1;
-  }
-  .btn-primary {
-    background-color: #007bff;
-    color: #fff;
-  }
-  .btn-primary:hover {
-    background-color: #0056b3;
-  }
-  .btn-secondary {
-    background-color: #6c757d;
-    color: #fff;
-  }
-  .btn-secondary:hover {
-    background-color: #5a6268;
-  }
-  .alert {
-    padding: 12px;
-    border-radius: 4px;
-    margin-bottom: 20px;
-  }
-  .alert-notice {
-    background-color: #d4edda;
-    color: #155724;
-    border-left: 4px solid #28a745;
-  }
-  .alert-error {
-    background-color: #f8d7da;
-    color: #721c24;
-    border-left: 4px solid #dc3545;
-  }
-  .help-text {
-    font-size: 13px;
-    color: #666;
-    margin-top: 4px;
-  }
-</style>
-
-<h1>Edit Profile</h1>
+<div class="container">
+  <h1>Edit Profile</h1>
 
 <% if flash[:notice] %>
   <div class="alert alert-notice"><%= flash[:notice] %></div>
@@ -114,7 +11,7 @@
   <div class="alert alert-error"><%= flash[:error] %></div>
 <% end %>
 
-<p style="margin-bottom: 30px; color: #666; font-size: 16px;">
+<p class="text-muted" style="margin-bottom: 32px; font-size: 16px;">
   Edit any of the below values to update what we have stored for you in Hack Club's email list.
 </p>
 
@@ -206,13 +103,14 @@
   </div>
 
   <div class="form-actions">
-    <%= form.submit "Update Profile", class: "btn btn-primary" %>
+    <%= form.submit "Update Profile", class: "btn" %>
     <%= link_to "Cancel", root_path, class: "btn btn-secondary" %>
   </div>
 <% end %>
 
-<div style="text-align: center; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 20px;">
+<div class="footer">
   <%= link_to "Mass unsubscribe +alt emails", alts_path %>
 </div>
 
 <%= render "shared/authenticated_footer" %>
+</div>

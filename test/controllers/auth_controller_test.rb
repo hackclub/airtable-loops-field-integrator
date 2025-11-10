@@ -400,7 +400,6 @@ class AuthControllerTest < ActionDispatch::IntegrationTest
   test "show_change_email requires authentication" do
     get auth_change_email_path
     assert_redirected_to auth_otp_request_path
-    assert_equal "Please authenticate to continue", flash[:error]
   end
 
   test "show_change_email shows form when authenticated" do
@@ -422,7 +421,6 @@ class AuthControllerTest < ActionDispatch::IntegrationTest
   test "change_email_request_otp requires authentication" do
     post auth_change_email_request_path, params: { email: "new@example.com" }
     assert_redirected_to auth_otp_request_path
-    assert_equal "Please authenticate to continue", flash[:error]
   end
 
   test "change_email_request_otp rejects same email" do
