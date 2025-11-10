@@ -28,7 +28,7 @@ module Pollable
     )
   end
 
-  def mark_failure!(err_hash, max_backoff: 30.minutes)
+  def mark_failure!(**err_hash, max_backoff: 30.minutes)
     n = consecutive_failures + 1
     penalty = [ 2**[ n, 10 ].min, 1 ].max
     update_columns(
