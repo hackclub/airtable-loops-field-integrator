@@ -27,7 +27,7 @@ queues:
     class: "PruneLlmCacheWorker"
     queue: default
   sync_loops_lists:
-    every: ["1h"]
+    every: ["15s"]
     class: "SyncLoopsListsWorker"
     queue: default
   prune_otp_verifications:
