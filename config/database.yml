@@ -77,13 +77,13 @@ production:
     <<: *default
     # Use the full connection URL provided by the hosting platform.
     # Example: postgres://USER:PASSWORD@HOST:5432/DBNAME
-    # Rails automatically uses DATABASE_URL if set, but we explicitly set it here
-    # to ensure it's used even if there are whitespace issues.
-    # Fallback to explicit config if DATABASE_URL is not set or empty (for Docker Compose)
-    <% db_url = ENV["DATABASE_URL"].to_s.strip %>
-    <% if !db_url.empty? && db_url.match?(/^postgres/i) %>
-    url: <%= db_url %>
+    # Only set url: if DATABASE_URL is present and non-empty.
+    # If not set, Rails will automatically use DATABASE_URL env var if available,
+    # or fall back to explicit config below.
+    <% if ENV["DATABASE_URL"] && !ENV["DATABASE_URL"].to_s.strip.empty? %>
+    url: <%= ENV["DATABASE_URL"].to_s.strip %>
     <% else %>
+    # Fallback: explicit config for Docker Compose environments
     host: <%= ENV.fetch("DB_HOST", "db") %>
     port: <%= ENV.fetch("DB_PORT", "5432") %>
     username: <%= ENV.fetch("DB_USERNAME", ENV.fetch("SERVICE_USER_DB", "postgres")) %>
