@@ -4,6 +4,24 @@ set -e
 # Remove a potentially pre-existing server.pid for Rails.
 rm -f /app/tmp/pids/server.pid
 
+# Print environment variables for debugging (masking sensitive values)
+echo "=== Environment Variables at Boot ==="
+echo "RAILS_ENV: ${RAILS_ENV:-not set}"
+echo "DATABASE_URL: ${DATABASE_URL:+set (length: ${#DATABASE_URL})}${DATABASE_URL:-NOT SET}"
+if [ -n "${DATABASE_URL}" ]; then
+  # Parse and display DATABASE_URL components (without password)
+  DB_URL_MASKED=$(echo "$DATABASE_URL" | sed -E 's|://([^:]+):([^@]+)@|://\1:***@|')
+  echo "DATABASE_URL (masked): $DB_URL_MASKED"
+fi
+echo "REDIS_URL: ${REDIS_URL:+set}${REDIS_URL:-NOT SET}"
+echo "SECRET_KEY_BASE: ${SECRET_KEY_BASE:+set (length: ${#SECRET_KEY_BASE})}${SECRET_KEY_BASE:-NOT SET}"
+echo "DB_HOST: ${DB_HOST:-not set}"
+echo "DB_PORT: ${DB_PORT:-not set}"
+echo "DB_POOL_SIZE: ${DB_POOL_SIZE:-not set}"
+echo "RAILS_MAX_THREADS: ${RAILS_MAX_THREADS:-not set}"
+echo "RAILS_LOG_LEVEL: ${RAILS_LOG_LEVEL:-not set}"
+echo "===================================="
+
 # Wait for PostgreSQL to be ready (TCP check to avoid requiring credentials)
 # Prefer DATABASE_URL for connectivity hints; fall back to DB_HOST/DB_PORT
 if [ -n "${DATABASE_URL}" ]; then
