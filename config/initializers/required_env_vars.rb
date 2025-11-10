@@ -1,5 +1,18 @@
 # Validate that required environment variables are set
-unless Rails.env.test?
+# Skip during asset precompilation (assets don't need these env vars)
+def asset_precompilation?
+  return true if ENV['RAILS_GROUPS'] == 'assets'
+  return false unless defined?(Rake)
+  begin
+    Rake.application&.top_level_tasks&.any? { |task| task.to_s.include?('assets:precompile') } || false
+  rescue NoMethodError, NameError
+    false
+  end
+end
+
+skip_validation = Rails.env.test? || asset_precompilation?
+
+unless skip_validation
   required_env_vars = {
     "AIRTABLE_PERSONAL_ACCESS_TOKEN" => ENV["AIRTABLE_PERSONAL_ACCESS_TOKEN"],
     "LOOPS_API_KEY" => ENV["LOOPS_API_KEY"],
