@@ -176,26 +176,6 @@ class ProfileUpdateController < ApplicationController
 
   private
 
-  def require_authenticated_session
-    token = session[:auth_token]
-    email = AuthenticationService.validate_session(token)
-
-    unless email
-      flash[:error] = "Please authenticate to continue"
-      redirect_to auth_otp_request_path
-      return
-    end
-
-    @current_authenticated_email = email
-  end
-
-  def current_authenticated_email
-    @current_authenticated_email ||= begin
-      token = session[:auth_token]
-      AuthenticationService.validate_session(token)
-    end
-  end
-
   def fetch_current_profile(email)
     contacts = LoopsService.find_contact(email: email)
     return {} if contacts.empty?

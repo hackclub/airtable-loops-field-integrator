@@ -7,6 +7,11 @@ unless Rails.env.test?
     "LOOPS_ALT_UNSUBSCRIBE_RESULTS_TRANSACTIONAL_ID" => ENV["LOOPS_ALT_UNSUBSCRIBE_RESULTS_TRANSACTIONAL_ID"],
     "LOOPS_OTP_TRANSACTIONAL_ID" => ENV["LOOPS_OTP_TRANSACTIONAL_ID"]
   }
+  
+  # DATABASE_URL is required in production
+  if Rails.env.production?
+    required_env_vars["DATABASE_URL"] = ENV["DATABASE_URL"]
+  end
 
   missing_vars = required_env_vars.select { |_key, value| value.blank? }.keys
 
@@ -26,6 +31,8 @@ unless Rails.env.test?
         error_message += "  - #{var} (transactional email ID for sending alt unsubscribe results)\n"
       when "LOOPS_OTP_TRANSACTIONAL_ID"
         error_message += "  - #{var} (transactional email ID for sending OTP codes)\n"
+      when "DATABASE_URL"
+        error_message += "  - #{var} (PostgreSQL connection URL, e.g., postgresql://user:pass@host:5432/dbname)\n"
       else
         error_message += "  - #{var}\n"
       end

@@ -41,3 +41,7 @@
 <%= link_to "Change profile information", auth_otp_request_path, class: "btn" %>
   <%= link_to "Mass unsubscribe +alt emails", alts_path, class: "btn", style: "background-color: #6c757d;" %>
 </div>
+
+<% if current_authenticated_email %>
+  <%= render "shared/authenticated_footer" %>
+<% end %>

@@ -13,6 +13,9 @@ Rails.application.routes.draw do
   post "auth/otp/request", to: "auth#request_otp"
   get "auth/otp/verify", to: "auth#show_verify_otp", as: :auth_otp_verify
   post "auth/otp/verify", to: "auth#verify_otp"
+  delete "auth/logout", to: "auth#logout", as: :auth_logout
+  get "auth/change_email", to: "auth#show_change_email", as: :auth_change_email
+  post "auth/change_email/request", to: "auth#change_email_request_otp", as: :auth_change_email_request
 
   # Profile update routes (require OTP auth, NOT admin auth)
   get "profile/edit", to: "profile_update#edit", as: :profile_edit

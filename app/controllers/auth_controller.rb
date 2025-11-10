@@ -1,5 +1,6 @@
 class AuthController < ApplicationController
   skip_before_action :authenticate_admin
+  before_action :require_authenticated_session, only: [:show_change_email, :change_email_request_otp]
 
   def show_otp_request
     # Check if user is already authenticated
@@ -62,6 +63,52 @@ class AuthController < ApplicationController
   end
 
   def verify_otp
+    # Check if this is an email change scenario
+    if session[:change_email_to].present?
+      new_email = session[:change_email_to]
+      code = params[:code]&.strip
+
+      if code.blank?
+        flash[:error] = "OTP code is required"
+        redirect_to auth_otp_verify_path
+        return
+      end
+
+      begin
+        AuthenticationService.verify_otp(new_email, code)
+
+        # Get old token before clearing session
+        old_token = session[:auth_token]
+
+        # Store redirect destination before reset_session clears it
+        destination = safe_path(profile_edit_path)
+
+        # Rotate session to prevent fixation attacks
+        reset_session
+
+        # Expire old session
+        AuthenticationService.destroy_session(old_token) if old_token.present?
+
+        # Create new authenticated session for new email
+        token = AuthenticationService.create_session(new_email)
+
+        # Store token in session cookie (after reset_session)
+        session[:auth_token] = token
+
+        flash[:notice] = "Successfully changed email to #{new_email}!"
+        redirect_to destination
+      rescue AuthenticationService::InvalidOtp, AuthenticationService::OtpExpired, AuthenticationService::OtpAlreadyVerified => e
+        flash[:error] = e.message
+        redirect_to auth_otp_verify_path
+      rescue => e
+        Rails.logger.error("AuthController#verify_otp (change email) error: #{e.class} - #{e.message}")
+        flash[:error] = "Failed to verify OTP. Please try again."
+        redirect_to auth_otp_verify_path
+      end
+      return
+    end
+
+    # Normal OTP verification flow
     email = session[:otp_email]
     code = params[:code]&.strip
 
@@ -101,6 +148,64 @@ class AuthController < ApplicationController
       Rails.logger.error("AuthController#verify_otp error: #{e.class} - #{e.message}")
       flash[:error] = "Failed to verify OTP. Please try again."
       redirect_to auth_otp_verify_path
+    end
+  end
+
+  def logout
+    old_token = session[:auth_token]
+    AuthenticationService.destroy_session(old_token) if old_token.present?
+    reset_session
+    flash[:notice] = "You have been logged out successfully."
+    redirect_to root_path
+  end
+
+  def show_change_email
+    @current_email = current_authenticated_email
+  end
+
+  def change_email_request_otp
+    current_email = current_authenticated_email
+    new_email = params[:email]&.strip
+
+    if new_email.blank?
+      flash[:error] = "Email is required"
+      redirect_to auth_change_email_path
+      return
+    end
+
+    new_email_normalized = EmailNormalizer.normalize(new_email)
+    current_email_normalized = EmailNormalizer.normalize(current_email)
+
+    if new_email_normalized == current_email_normalized
+      flash[:error] = "New email must be different from your current email."
+      redirect_to auth_change_email_path
+      return
+    end
+
+    begin
+      code = AuthenticationService.generate_otp(new_email)
+
+      # Send OTP via Loops transactional email
+      transactional_id = ENV.fetch("LOOPS_OTP_TRANSACTIONAL_ID")
+      LoopsService.send_transactional_email(
+        email: new_email,
+        transactional_id: transactional_id,
+        data_variables: { otp_code: code }
+      )
+
+      # Store new email in session for verification step
+      session[:change_email_to] = new_email
+      session[:otp_email] = new_email  # Also set for the verify page to show email
+
+      flash[:notice] = "OTP code sent to #{new_email}. Please check your inbox."
+      redirect_to auth_otp_verify_path
+    rescue AuthenticationService::RateLimitExceeded => e
+      flash[:error] = e.message
+      redirect_to auth_change_email_path
+    rescue => e
+      Rails.logger.error("AuthController#change_email_request_otp error: #{e.class} - #{e.message}")
+      flash[:error] = "Failed to send OTP. Please try again."
+      redirect_to auth_change_email_path
     end
   end
 

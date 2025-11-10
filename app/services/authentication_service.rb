@@ -110,6 +110,16 @@ module AuthenticationService
       session.email_normalized
     end
 
+    def destroy_session(token)
+      return if token.blank?
+
+      session = AuthenticatedSession.find_by(token: token)
+      return unless session
+
+      # Expire the session by setting expires_at to current time
+      session.update!(expires_at: Time.current)
+    end
+
     def rate_limit_check(email_normalized)
       rate_limiter = RateLimiter.new(
         redis: REDIS_FOR_RATE_LIMITING,

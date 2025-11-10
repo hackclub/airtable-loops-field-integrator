@@ -36,25 +36,5 @@ class AltsController < ApplicationController
     redirect_to alts_path
   end
 
-  private
-
-  def require_authenticated_session
-    token = session[:auth_token]
-    email = AuthenticationService.validate_session(token)
-
-    unless email
-      flash[:error] = "Please authenticate to continue"
-      # Preserve the current path as redirect destination after authentication
-      session[:redirect_after_auth] = request.path
-      redirect_to auth_otp_request_path
-      return
-    end
-
-    @current_authenticated_email = email
-  end
-
-  def current_authenticated_email
-    @current_authenticated_email
-  end
 end
 

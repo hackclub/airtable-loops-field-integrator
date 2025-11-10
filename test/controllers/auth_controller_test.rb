@@ -280,5 +280,301 @@ class AuthControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to profile_edit_path
     assert_not_equal "https://evil.com/phishing", @response.redirect_url
   end
+
+  test "logout expires session in database" do
+    # Authenticate user first
+    code = AuthenticationService.generate_otp(@email)
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { code }) do
+        post auth_otp_request_path, params: { email: @email }
+      end
+      post auth_otp_verify_path, params: { code: code }
+    end
+
+    # Get the session token
+    token = session[:auth_token]
+    session_record = AuthenticatedSession.find_by(token: token)
+    assert session_record.expires_at > Time.current
+
+    # Logout
+    delete auth_logout_path
+
+    # Session should be expired
+    session_record.reload
+    assert session_record.expires_at <= Time.current
+  end
+
+  test "logout clears session cookie" do
+    # Authenticate user first
+    code = AuthenticationService.generate_otp(@email)
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { code }) do
+        post auth_otp_request_path, params: { email: @email }
+      end
+      post auth_otp_verify_path, params: { code: code }
+    end
+
+    assert session[:auth_token].present?
+
+    # Logout
+    delete auth_logout_path
+
+    # Session token should be cleared
+    assert_nil session[:auth_token]
+  end
+
+  test "logout rotates session" do
+    # Authenticate user first
+    code = AuthenticationService.generate_otp(@email)
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { code }) do
+        post auth_otp_request_path, params: { email: @email }
+      end
+      post auth_otp_verify_path, params: { code: code }
+    end
+
+    # Set some session keys that should be cleared
+    session[:redirect_after_auth] = "/some/path"
+    session[:otp_email] = "test@example.com"
+    session[:change_email_to] = "new@example.com"
+    
+    # Capture session state before logout
+    session_hash_before = session.to_hash.dup
+
+    # Logout
+    delete auth_logout_path
+
+    # Session should be rotated - all custom keys should be cleared
+    assert_nil session[:auth_token]
+    assert_nil session[:redirect_after_auth]
+    assert_nil session[:otp_email]
+    assert_nil session[:change_email_to]
+    
+    # Session hash should be different (rotated)
+    session_hash_after = session.to_hash
+    # Rails internals may remain, but our custom keys should be gone
+    assert_not_equal session_hash_before.keys.sort, session_hash_after.keys.sort
+  end
+
+  test "logout redirects to home" do
+    # Authenticate user first
+    code = AuthenticationService.generate_otp(@email)
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { code }) do
+        post auth_otp_request_path, params: { email: @email }
+      end
+      post auth_otp_verify_path, params: { code: code }
+    end
+
+    # Logout
+    delete auth_logout_path
+
+    assert_redirected_to root_path
+  end
+
+  test "logout shows success message" do
+    # Authenticate user first
+    code = AuthenticationService.generate_otp(@email)
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { code }) do
+        post auth_otp_request_path, params: { email: @email }
+      end
+      post auth_otp_verify_path, params: { code: code }
+    end
+
+    # Logout
+    delete auth_logout_path
+
+    assert_equal "You have been logged out successfully.", flash[:notice]
+  end
+
+  test "logout when not authenticated" do
+    # Logout without being authenticated
+    delete auth_logout_path
+
+    # Should still redirect successfully
+    assert_redirected_to root_path
+    assert_equal "You have been logged out successfully.", flash[:notice]
+  end
+
+  test "show_change_email requires authentication" do
+    get auth_change_email_path
+    assert_redirected_to auth_otp_request_path
+    assert_equal "Please authenticate to continue", flash[:error]
+  end
+
+  test "show_change_email shows form when authenticated" do
+    # Authenticate user first
+    code = AuthenticationService.generate_otp(@email)
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { code }) do
+        post auth_otp_request_path, params: { email: @email }
+      end
+      post auth_otp_verify_path, params: { code: code }
+    end
+
+    get auth_change_email_path
+    assert_response :success
+    assert_match(/Change Email/i, response.body)
+    assert_match(/currently logged in/i, response.body)
+  end
+
+  test "change_email_request_otp requires authentication" do
+    post auth_change_email_request_path, params: { email: "new@example.com" }
+    assert_redirected_to auth_otp_request_path
+    assert_equal "Please authenticate to continue", flash[:error]
+  end
+
+  test "change_email_request_otp rejects same email" do
+    # Authenticate user first
+    code = AuthenticationService.generate_otp(@email)
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { code }) do
+        post auth_otp_request_path, params: { email: @email }
+      end
+      post auth_otp_verify_path, params: { code: code }
+    end
+
+    # Try to change to same email
+    post auth_change_email_request_path, params: { email: @email }
+    assert_redirected_to auth_change_email_path
+    assert_match(/must be different/i, flash[:error])
+  end
+
+  test "change_email_request_otp generates OTP for new email" do
+    # Authenticate user first
+    code = AuthenticationService.generate_otp(@email)
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { code }) do
+        post auth_otp_request_path, params: { email: @email }
+      end
+      post auth_otp_verify_path, params: { code: code }
+    end
+
+    new_email = "new@example.com"
+    # Clear rate limit for new email
+    REDIS_FOR_RATE_LIMITING.del("rate:otp:#{EmailNormalizer.normalize(new_email)}")
+    new_code = AuthenticationService.generate_otp(new_email)
+
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { new_code }) do
+        post auth_change_email_request_path, params: { email: new_email }
+      end
+    end
+
+    assert_redirected_to auth_otp_verify_path
+    assert_equal "OTP code sent to #{new_email}. Please check your inbox.", flash[:notice]
+    assert_equal new_email, session[:change_email_to]
+    assert_equal new_email, session[:otp_email]
+  end
+
+  test "verify_otp handles email change scenario" do
+    # Authenticate user first
+    code = AuthenticationService.generate_otp(@email)
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { code }) do
+        post auth_otp_request_path, params: { email: @email }
+      end
+      post auth_otp_verify_path, params: { code: code }
+    end
+
+    old_token = session[:auth_token]
+    new_email = "new@example.com"
+    # Clear rate limit for new email
+    REDIS_FOR_RATE_LIMITING.del("rate:otp:#{EmailNormalizer.normalize(new_email)}")
+    new_code = AuthenticationService.generate_otp(new_email)
+
+    # Request change email OTP
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { new_code }) do
+        post auth_change_email_request_path, params: { email: new_email }
+      end
+    end
+
+    # Verify OTP for new email
+    post auth_otp_verify_path, params: { code: new_code }
+
+    assert_redirected_to profile_edit_path
+    assert_match(/Successfully changed email/i, flash[:notice])
+
+    # Old session should be expired
+    old_session = AuthenticatedSession.find_by(token: old_token)
+    assert old_session.expires_at <= Time.current
+
+    # New session should be created
+    new_token = session[:auth_token]
+    assert_not_equal old_token, new_token
+    new_session = AuthenticatedSession.find_by(token: new_token)
+    assert_equal EmailNormalizer.normalize(new_email), new_session.email_normalized
+  end
+
+  test "email change creates new session and clears old one" do
+    # Authenticate user first
+    code = AuthenticationService.generate_otp(@email)
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { code }) do
+        post auth_otp_request_path, params: { email: @email }
+      end
+      post auth_otp_verify_path, params: { code: code }
+    end
+
+    old_token = session[:auth_token]
+    old_session = AuthenticatedSession.find_by(token: old_token)
+    assert old_session.expires_at > Time.current
+
+    new_email = "new@example.com"
+    # Clear rate limit for new email
+    REDIS_FOR_RATE_LIMITING.del("rate:otp:#{EmailNormalizer.normalize(new_email)}")
+    new_code = AuthenticationService.generate_otp(new_email)
+
+    # Request change email OTP
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { new_code }) do
+        post auth_change_email_request_path, params: { email: new_email }
+      end
+    end
+
+    # Verify OTP for new email
+    post auth_otp_verify_path, params: { code: new_code }
+
+    # Old session should be expired
+    old_session.reload
+    assert old_session.expires_at <= Time.current
+
+    # New session should exist and be valid
+    new_token = session[:auth_token]
+    assert_not_nil new_token
+    assert_not_equal old_token, new_token
+    new_session = AuthenticatedSession.find_by(token: new_token)
+    assert new_session.expires_at > Time.current
+  end
+
+  test "email change redirects correctly" do
+    # Authenticate user first
+    code = AuthenticationService.generate_otp(@email)
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { code }) do
+        post auth_otp_request_path, params: { email: @email }
+      end
+      post auth_otp_verify_path, params: { code: code }
+    end
+
+    new_email = "new@example.com"
+    # Clear rate limit for new email
+    REDIS_FOR_RATE_LIMITING.del("rate:otp:#{EmailNormalizer.normalize(new_email)}")
+    new_code = AuthenticationService.generate_otp(new_email)
+
+    # Request change email OTP
+    LoopsService.stub(:send_transactional_email, ->(*args) { { "success" => true } }) do
+      AuthenticationService.stub(:generate_otp, ->(email) { new_code }) do
+        post auth_change_email_request_path, params: { email: new_email }
+      end
+    end
+
+    # Verify OTP for new email
+    post auth_otp_verify_path, params: { code: new_code }
+
+    assert_redirected_to profile_edit_path
+  end
 end
 

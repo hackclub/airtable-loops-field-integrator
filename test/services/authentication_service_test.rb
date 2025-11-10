@@ -193,5 +193,37 @@ class AuthenticationServiceTest < ActiveSupport::TestCase
     result = AuthenticationService.verify_otp(@email, code2)
     assert_equal true, result
   end
+
+  test "destroy_session expires session" do
+    token = AuthenticationService.create_session(@email)
+    session = AuthenticatedSession.find_by(token: token)
+    
+    assert session.expires_at > Time.current
+    assert_not session.expired?
+    
+    # Destroy session
+    AuthenticationService.destroy_session(token)
+    
+    session.reload
+    assert session.expires_at <= Time.current
+    assert session.expired?
+    
+    # Session should no longer be valid
+    result = AuthenticationService.validate_session(token)
+    assert_nil result
+  end
+
+  test "destroy_session handles invalid token gracefully" do
+    # Should not raise error for invalid token
+    assert_nothing_raised do
+      AuthenticationService.destroy_session("invalid_token")
+    end
+  end
+
+  test "destroy_session handles nil token gracefully" do
+    assert_nothing_raised do
+      AuthenticationService.destroy_session(nil)
+    end
+  end
 end
 

@@ -1,0 +1,123 @@
+<% content_for :title, "Change Email" %>
+
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    max-width: 500px;
+    margin: 50px auto;
+    padding: 20px;
+    line-height: 1.6;
+  }
+  h1 {
+    color: #333;
+    margin-bottom: 30px;
+  }
+  .form-group {
+    margin-bottom: 20px;
+  }
+  label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 500;
+    color: #333;
+  }
+  input[type="email"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+    font-family: inherit;
+    box-sizing: border-box;
+  }
+  .form-actions {
+    margin-top: 30px;
+  }
+  .btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 4px;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    width: 100%;
+  }
+  .btn-primary {
+    background-color: #007bff;
+    color: #fff;
+  }
+  .btn-primary:hover {
+    background-color: #0056b3;
+  }
+  .btn-secondary {
+    background-color: #6c757d;
+    color: #fff;
+  }
+  .btn-secondary:hover {
+    background-color: #5a6268;
+  }
+  .alert {
+    padding: 12px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+  }
+  .alert-notice {
+    background-color: #d4edda;
+    color: #155724;
+    border-left: 4px solid #28a745;
+  }
+  .alert-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border-left: 4px solid #dc3545;
+  }
+  .current-email-display {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    color: #666;
+    font-size: 14px;
+  }
+  .current-email-display strong {
+    color: #333;
+  }
+</style>
+
+<h1>Change Email</h1>
+
+<% if flash[:notice] %>
+  <div class="alert alert-notice"><%= flash[:notice] %></div>
+<% end %>
+
+<% if flash[:error] %>
+  <div class="alert alert-error"><%= flash[:error] %></div>
+<% end %>
+
+<% if @current_email %>
+  <div class="current-email-display">
+    You're currently logged in as <strong><%= @current_email %></strong>
+  </div>
+<% end %>
+
+<%= form_with url: auth_change_email_request_path, method: :post, local: true do |form| %>
+  <div class="form-group">
+    <%= form.label :email, "New Email Address" %>
+    <%= form.email_field :email, required: true, autofocus: true, placeholder: "new@email.com" %>
+  </div>
+
+  <div class="form-actions">
+    <%= form.submit "Send OTP Code", class: "btn btn-primary" %>
+  </div>
+<% end %>
+
+<div style="margin-top: 20px; text-align: center;">
+  <%= link_to "← Cancel", profile_edit_path, class: "btn btn-secondary" %>
+</div>
+
+<p style="margin-top: 30px; color: #666; font-size: 14px;">
+  We'll send a one-time password (OTP) to your new email address to verify your identity. You'll remain logged in until you verify the new email.
+</p>
+
