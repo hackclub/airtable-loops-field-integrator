@@ -330,4 +330,98 @@ class ProfileUpdateControllerTest < ActionDispatch::IntegrationTest
       assert_equal "profile_update", audit.provenance["purpose"]
     end
   end
+
+  test "update preserves nonstandard gender value when form submits empty" do
+    # Authenticate first
+    authenticate_user
+    
+    # Set up a contact with a nonstandard gender value
+    nonstandard_contact = @mock_contact.dup
+    nonstandard_contact["genderSelfReported"] = "she/her"
+    
+    LoopsService.stub(:find_contact, ->(**args) { [nonstandard_contact] }) do
+      with_capture_update do |captured|
+        silence_audit_side_effects do
+          # Submit form with empty genderSelfReported (form can't match nonstandard value)
+          # and update firstName to ensure we're actually making a change
+          patch profile_path, params: {
+            firstName: "Jane",
+            genderSelfReported: "" # Empty because form can't match "she/her"
+          }
+          
+          assert_redirected_to profile_edit_path
+          follow_redirect! if response.redirect?
+          assert_nil flash[:error]
+          
+          # Verify that genderSelfReported was NOT included in the update payload
+          assert_equal 1, captured.size
+          assert_equal "test@example.com", captured.first[:email]
+          assert_equal "Jane", captured.first[:payload]["firstName"]
+          assert_nil captured.first[:payload]["genderSelfReported"], 
+            "genderSelfReported should not be included in update when form submits empty for nonstandard value"
+        end
+      end
+    end
+  end
+
+  test "update includes standard gender value when changed" do
+    # Authenticate first
+    authenticate_user
+    
+    # Set up a contact with a standard gender value
+    contact_with_male = @mock_contact.dup
+    contact_with_male["genderSelfReported"] = "male"
+    
+    LoopsService.stub(:find_contact, ->(**args) { [contact_with_male] }) do
+      with_capture_update do |captured|
+        silence_audit_side_effects do
+          # Change gender from male to female
+          patch profile_path, params: {
+            genderSelfReported: "female"
+          }
+          
+          assert_redirected_to profile_edit_path
+          follow_redirect! if response.redirect?
+          assert_nil flash[:error]
+          
+          # Verify that genderSelfReported WAS included in the update payload
+          assert_equal 1, captured.size
+          assert_equal "female", captured.first[:payload]["genderSelfReported"]
+        end
+      end
+    end
+  end
+
+  test "update does not include blank fields in payload" do
+    # Authenticate first
+    authenticate_user
+    
+    with_capture_update do |captured|
+      silence_audit_side_effects do
+        # Submit form with only firstName set, others blank
+        patch profile_path, params: {
+          firstName: "Jane",
+          lastName: "",
+          genderSelfReported: "",
+          addressLine1: "",
+          addressCity: "",
+          addressState: "",
+          addressZipCode: "",
+          addressCountry: ""
+        }
+        
+        assert_redirected_to profile_edit_path
+        follow_redirect! if response.redirect?
+        assert_nil flash[:error]
+        
+        # Verify only firstName is in the payload (non-blank values only)
+        assert_equal 1, captured.size
+        payload = captured.first[:payload]
+        assert_equal "Jane", payload["firstName"]
+        assert_nil payload["lastName"], "Blank lastName should not be included"
+        assert_nil payload["genderSelfReported"], "Blank genderSelfReported should not be included"
+        assert_nil payload["addressLine1"], "Blank addressLine1 should not be included"
+      end
+    end
+  end
 end

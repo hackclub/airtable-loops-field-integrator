@@ -76,7 +76,9 @@ class ProfileUpdateController < ApplicationController
     # Remove birthday component fields from params (we've combined them into birthday)
     profile_params = profile_params.except("birthdayYear", "birthdayMonth", "birthdayDay")
 
-    # Only include fields that have changed from current values
+    # Only include fields that have changed from current values AND have non-blank values
+    # This ensures we don't send nil/empty values that would overwrite existing data
+    # (upsert behavior: only update fields that are explicitly provided with values)
     fields_to_update = {}
     
     profile_params.each do |key, new_value|
@@ -86,10 +88,15 @@ class ProfileUpdateController < ApplicationController
       current_normalized = (current_value || "").to_s.strip
       new_normalized = (new_value || "").to_s.strip
       
-      # Include field if it's different from current value
-      if new_normalized != current_normalized
-        fields_to_update[key] = new_value.presence
-      end
+      # Skip if values are the same
+      next if new_normalized == current_normalized
+      
+      # Only include fields with non-blank values
+      # This preserves existing values when form can't match them (e.g., nonstandard genders)
+      # and follows upsert principle: only update fields explicitly set
+      next unless new_value.present?
+      
+      fields_to_update[key] = new_value
     end
     
     # Handle addressLine2: if any REQUIRED address field is being edited, include it even if blank
