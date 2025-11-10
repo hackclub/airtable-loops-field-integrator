@@ -41,6 +41,11 @@ RUN chmod +x /usr/bin/entrypoint.sh
 # Copy application code (required for production images without bind mounts)
 COPY . .
 
+# Precompile assets for production
+# Set a dummy SECRET_KEY_BASE for asset precompilation (not used for serving)
+# RAILS_ENV is set only for this RUN command to avoid persisting it in the image
+RUN RAILS_ENV=production SECRET_KEY_BASE=dummy_secret_key_base_for_asset_precompilation_only bundle exec rails assets:precompile
+
 ENTRYPOINT ["entrypoint.sh"]
 
 # Expose port
