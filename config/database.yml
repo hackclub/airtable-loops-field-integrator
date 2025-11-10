@@ -93,6 +93,7 @@ production:
   production_readonly:
     <<: *default
     url: <%= ENV["PROD_READONLY_DATABASE_URL"] %>
+    replica: true
   warehouse_readonly:
     url: <%= ENV["WAREHOUSE_LOOPS_AUDIENCE_READONLY_URL"] || ENV["WAREHOUSE_LOOPS_AUDIENCE_EMAIL_READONLY_URL"] %>
     replica: true  # Mark as read-only replica to prevent migration checks
