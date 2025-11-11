@@ -8,15 +8,22 @@ module ProdDbHelper
       raise "PROD_READONLY_DATABASE_URL environment variable not set"
     end
 
-    # Get the production readonly config (it's nested under production: block)
-    prod_config = ActiveRecord::Base.configurations.configs_for(env_name: "production", name: "production_readonly").first
+    # Try to get config from database.yml first
+    configs = ActiveRecord::Base.configurations.configs_for(env_name: "production", name: "production_readonly")
+    prod_config = configs&.first
     
     unless prod_config
-      raise "production_readonly database configuration not found in config/database.yml"
+      # Fallback: create config hash directly from URL
+      prod_config_hash = {
+        adapter: "postgresql",
+        url: ENV["PROD_READONLY_DATABASE_URL"],
+        replica: true
+      }
+      ActiveRecord::Base.establish_connection(prod_config_hash)
+    else
+      # Use config from database.yml
+      ActiveRecord::Base.establish_connection(prod_config.configuration_hash)
     end
-
-    # Establish connection to production readonly
-    ActiveRecord::Base.establish_connection(prod_config.configuration_hash)
     
     begin
       # Verify connection works
