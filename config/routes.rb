@@ -40,6 +40,9 @@ Rails.application.routes.draw do
     get "emails/*email", to: "emails#show", as: "admin_email_audit_log", format: false
 
     # Sync sources management
+    post "sync_sources/ignore", to: "sync_sources#ignore", as: :admin_sync_sources_ignore
+    delete "sync_sources/ignore", to: "sync_sources#unignore", as: :admin_sync_sources_unignore
+    post "sync_sources/:id/restore", to: "sync_sources#restore", as: :admin_sync_source_restore
     resources :sync_sources, path: "sync_sources", as: "admin_sync_sources"
   end
 end

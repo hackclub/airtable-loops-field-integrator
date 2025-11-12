@@ -1,0 +1,183 @@
+<% if @source_items.any? %>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Source ID</th>
+        <th>Status</th>
+        <th>Last Successful Poll</th>
+        <th>Next Poll</th>
+        <th>Failures</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% @source_items.each do |source_item| %>
+        <% sync_source = @sync_sources_by_source_id[source_item["id"]] %>
+        <% ignored = @ignored.include?(source_item["id"]) %>
+        <% next if ignored %><!-- Skip ignored sources in main table -->
+        <tr>
+          <td>
+            <div class="base-name">
+              <% if sync_source && sync_source.display_name.present? %>
+                <%= sync_source.display_name %>
+              <% else %>
+                <%= source_item["name"] || "Unnamed Source" %>
+              <% end %>
+            </div>
+          </td>
+          <td>
+            <div class="base-id"><%= source_item["id"] %></div>
+          </td>
+          <td>
+            <% if sync_source %>
+              <% if sync_source.consecutive_failures > 0 %>
+                <span class="status-badge status-error">Error (<%= sync_source.consecutive_failures %>)</span>
+              <% else %>
+                <span class="status-badge status-active">Active</span>
+              <% end %>
+            <% else %>
+              <span class="status-badge status-none">No Sync Source</span>
+            <% end %>
+          </td>
+          <td>
+            <% if sync_source&.last_successful_poll_at %>
+              <span data-utc-time="<%= sync_source.last_successful_poll_at.iso8601 %>">
+                <%= sync_source.last_successful_poll_at.strftime("%b %d, %Y %I:%M %p UTC") %>
+              </span>
+            <% else %>
+              <span class="empty">Never</span>
+            <% end %>
+          </td>
+          <td>
+            <% if sync_source&.next_poll_at %>
+              <span data-utc-time="<%= sync_source.next_poll_at.iso8601 %>">
+                <%= sync_source.next_poll_at.strftime("%b %d, %Y %I:%M %p UTC") %>
+              </span>
+            <% else %>
+              <span class="empty">—</span>
+            <% end %>
+          </td>
+          <td>
+            <%= sync_source&.consecutive_failures || 0 %>
+          </td>
+          <td class="actions">
+            <% if sync_source %>
+              <%= link_to "View", admin_sync_source_path(sync_source) %>
+              <%= link_to "Edit", edit_admin_sync_source_path(sync_source) %>
+              <%= button_to "Archive", admin_sync_source_path(sync_source), 
+                  method: :delete, 
+                  data: { confirm: "Are you sure you want to archive (soft-delete) this sync source?" }, 
+                  class: "btn-danger",
+                  style: "display: inline; padding: 0; border: none; background: none; color: #dc3545; text-decoration: underline; cursor: pointer; font-size: 14px; margin-left: 10px;",
+                  title: "Archives (soft-deletes) this sync source. It can be restored from the 'Ignored / Deleted Sources' section." %>
+              <%= button_to "Ignore", admin_sync_sources_ignore_path, 
+                  params: { source: @source, source_id: "^#{source_item["id"]}$" },
+                  method: :post,
+                  title: "Creates an ignore pattern: ^#{source_item["id"]}$ (exact match)",
+                  style: "display: inline; padding: 0; border: none; background: none; color: #6c757d; text-decoration: underline; cursor: pointer; font-size: 14px; margin-left: 10px;" %>
+            <% else %>
+              <%= link_to "Create", new_admin_sync_source_path(source: @source, source_id: source_item["id"]) %>
+              <%= button_to "Ignore", admin_sync_sources_ignore_path, 
+                  params: { source: @source, source_id: "^#{source_item["id"]}$" },
+                  method: :post,
+                  title: "Creates an ignore pattern: ^#{source_item["id"]}$ (exact match)",
+                  style: "display: inline; padding: 0; border: none; background: none; color: #6c757d; text-decoration: underline; cursor: pointer; font-size: 14px; margin-left: 10px;" %>
+            <% end %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% else %>
+  <p class="empty">No sources found.</p>
+<% end %>
+
+<% ignored_sources = @source_items.select { |s| @ignored.include?(s["id"]) } %>
+<% if ignored_sources.any? || @pattern_ignores.any? %>
+  <h2 style="margin-top: 40px; margin-bottom: 20px;">Ignored Sources</h2>
+  
+  <% if @pattern_ignores.any? %>
+    <div style="margin-bottom: 30px;">
+      <h3 style="margin-bottom: 10px; font-size: 16px; color: #666;">Ignore Patterns</h3>
+      <table style="margin-bottom: 20px;">
+        <thead>
+          <tr>
+            <th>Pattern</th>
+            <th>Reason</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% @pattern_ignores.each do |pattern_ignore| %>
+            <tr>
+              <td>
+                <code style="background-color: #f5f5f5; padding: 4px 8px; border-radius: 3px; font-family: monospace;"><%= pattern_ignore.source_id %></code>
+              </td>
+              <td>
+                <%= pattern_ignore.reason || "<em style='color: #999;'>No reason</em>".html_safe %>
+              </td>
+              <td class="actions">
+                <%= button_to "Remove Pattern", admin_sync_sources_unignore_path, 
+                    params: { source: @source, ignore_id: pattern_ignore.id },
+                    method: :delete,
+                    style: "display: inline; padding: 0; border: none; background: none; color: #dc3545; text-decoration: underline; cursor: pointer; font-size: 14px;" %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+  
+  <% if ignored_sources.any? %>
+    <div style="margin-bottom: 20px;">
+      <h3 style="margin-bottom: 10px; font-size: 16px; color: #666;">Ignored Source IDs</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Source ID</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% ignored_sources.each do |source_item| %>
+            <tr>
+              <td>
+                <div class="base-name"><%= source_item["name"] || "Unnamed Source" %></div>
+              </td>
+              <td>
+                <div class="base-id"><%= source_item["id"] %></div>
+              </td>
+              <td class="actions">
+            <%# Find all ignore records that match this source %>
+            <% matching_ignores = @matching_ignores_by_source_id[source_item["id"]] || [] %>
+            <% if matching_ignores.any? %>
+              <% if matching_ignores.count == 1 %>
+                <%# Single pattern - simple unignore %>
+                <%= button_to "Unignore", admin_sync_sources_unignore_path, 
+                    params: { source: @source, ignore_id: matching_ignores.first.id },
+                    method: :delete,
+                    title: "Removes ignore pattern: #{matching_ignores.first.source_id}",
+                    style: "display: inline; padding: 0; border: none; background: none; color: #007bff; text-decoration: underline; cursor: pointer; font-size: 14px;" %>
+              <% else %>
+                <%# Multiple patterns match - show count and let admin know %>
+                <span style="color: #666; font-size: 12px;">Matched by <%= matching_ignores.count %> pattern(s)</span>
+                <% matching_ignores.each do |ignore| %>
+                  <%= button_to "Remove #{ignore.source_id}", admin_sync_sources_unignore_path, 
+                      params: { source: @source, ignore_id: ignore.id },
+                      method: :delete,
+                      style: "display: block; padding: 2px 0; border: none; background: none; color: #007bff; text-decoration: underline; cursor: pointer; font-size: 12px;" %>
+                <% end %>
+              <% end %>
+            <% end %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  <% end %>
+<% end %>
+

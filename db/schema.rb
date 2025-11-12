@@ -10,13 +10,14 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_11_07_023220) do
+ActiveRecord::Schema[8.0].define(version: 2025_11_12_002225) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
   # Custom types defined in this database.
   # Note that some types may not work with other database engines. Be careful if changing database.
   create_enum "loops_outbox_envelope_status", ["queued", "sent", "ignored_noop", "failed", "partially_sent"]
+  create_enum "sync_source_deleted_reason", ["disappeared", "manual", "ignored_pattern"]
 
   create_table "authenticated_sessions", force: :cascade do |t|
     t.string "email_normalized", null: false
@@ -145,6 +146,14 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_07_023220) do
     t.index ["expires_at"], name: "index_otp_verifications_on_expires_at"
   end
 
+  create_table "sync_source_ignores", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "source", null: false
+    t.string "source_id", null: false
+    t.string "reason"
+  end
+
   create_table "sync_sources", force: :cascade do |t|
     t.string "source", null: false
     t.string "source_id", null: false
@@ -161,8 +170,13 @@ ActiveRecord::Schema[8.0].define(version: 2025_11_07_023220) do
     t.jsonb "metadata", default: {}, null: false
     t.string "display_name"
     t.datetime "display_name_updated_at"
+    t.datetime "deleted_at"
+    t.datetime "first_seen_at"
+    t.integer "seen_count", default: 0, null: false
+    t.datetime "last_seen_at"
+    t.enum "deleted_reason", enum_type: "sync_source_deleted_reason"
     t.index ["next_poll_at"], name: "index_sync_sources_on_next_poll_at"
-    t.index ["source", "source_id"], name: "index_sync_sources_on_source_and_source_id", unique: true
+    t.index ["source", "source_id"], name: "index_sync_sources_active_unique", unique: true, where: "(deleted_at IS NULL)"
   end
 
   add_foreign_key "field_value_baselines", "sync_sources"

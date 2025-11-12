@@ -1,4 +1,4 @@
-<% content_for :title, "Airtable Sync Sources" %>
+<% content_for :title, "Sync Sources" %>
 
 <style>
   body {
@@ -129,94 +129,107 @@
   <%= link_to "Sidekiq", "/admin/sidekiq", class: (request.path.start_with?("/admin/sidekiq") ? "active" : "") %>
 </div>
 
-<h1>Airtable Sync Sources</h1>
+<h1>Sync Sources</h1>
 
 <% if @error %>
   <div class="error"><%= @error %></div>
 <% end %>
 
-<%= link_to "Create New Sync Source", new_admin_sync_source_path, class: "btn-primary" %>
+<div style="margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 4px;">
+  <%= form_with url: admin_sync_sources_path, method: :get, local: true, style: "display: flex; gap: 10px; align-items: flex-end;" do |f| %>
+    <div style="flex: 0 0 auto;">
+      <%= label_tag :source, "Source Type:", style: "display: block; margin-bottom: 5px; font-weight: 500;" %>
+      <%= select_tag :source, 
+          options_for_select(
+            available_sources.map { |s| [s.capitalize, s] },
+            @source
+          ),
+          { prompt: "Select a source type...", required: true, style: "padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;", onchange: "this.form.submit();" } %>
+    </div>
+    <div>
+      <%= submit_tag "View", style: "padding: 8px 16px; background-color: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;" %>
+    </div>
+  <% end %>
+</div>
 
-<% if @bases.any? %>
+<% if @source.present? %>
+  <%= link_to "Create New Sync Source", new_admin_sync_source_path(source: @source), class: "btn-primary" %>
+<% end %>
+
+<% if @source.present? %>
+  <% if @source == "airtable" %>
+    <%= render "airtable_discovery" %>
+  <% else %>
+    <p class="empty">No discovery UI available for source: <%= @source %></p>
+  <% end %>
+<% end %>
+
+<% if @source.present? %>
+<h2 style="margin-top: 40px; margin-bottom: 20px;">Create Ignore Pattern</h2>
+<div style="background-color: #f8f9fa; padding: 20px; border-radius: 4px; margin-bottom: 20px;">
+  <p style="margin-bottom: 15px; color: #666;">
+    Use regex patterns to ignore multiple sources at once. For example:
+  </p>
+  <ul style="margin-bottom: 15px; color: #666; padding-left: 20px;">
+    <li><code>^app.*</code> - Ignore all sources starting with "app"</li>
+    <li><code>.*test.*</code> - Ignore all sources containing "test"</li>
+    <li><code>^(?!app8Hj0IfRlaZYb3g$).*</code> - Ignore everything except source ID "app8Hj0IfRlaZYb3g"</li>
+  </ul>
+  <%= form_with url: admin_sync_sources_ignore_path, method: :post, local: true, style: "display: flex; gap: 10px; align-items: flex-end;" do |f| %>
+    <%= hidden_field_tag :source, @source %>
+    <div style="flex: 1;">
+      <%= label_tag :pattern, "Regex Pattern:", style: "display: block; margin-bottom: 5px; font-weight: 500;" %>
+      <%= text_field_tag :pattern, "", placeholder: "^app.*", required: true, style: "width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace;" %>
+      <small style="color: #666; font-size: 12px;">For exact matches, use: <code>^exact_id$</code></small>
+    </div>
+    <div style="flex: 1;">
+      <%= label_tag :reason, "Reason (optional):", style: "display: block; margin-bottom: 5px; font-weight: 500;" %>
+      <%= text_field_tag :reason, "", placeholder: "Development sources", style: "width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" %>
+    </div>
+    <div>
+      <%= submit_tag "Create Pattern", style: "padding: 8px 16px; background-color: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;" %>
+    </div>
+  <% end %>
+</div>
+<% end %>
+
+<% if @source.present? && @deleted_sources&.any? %>
+  <h2 style="margin-top: 40px; margin-bottom: 20px;">Ignored / Deleted Sources</h2>
   <table>
     <thead>
       <tr>
-        <th>Base Name</th>
-        <th>Base ID</th>
-        <th>Status</th>
-        <th>Last Successful Poll</th>
-        <th>Next Poll</th>
-        <th>Failures</th>
+        <th>Name</th>
+        <th>Source ID</th>
+        <th>Deleted Reason</th>
+        <th>Deleted At</th>
         <th>Actions</th>
       </tr>
     </thead>
     <tbody>
-      <% @bases.each do |base| %>
-        <% sync_source = @sync_sources_by_base_id[base["id"]] %>
+      <% @deleted_sources.each do |ss| %>
         <tr>
+          <td><%= ss.humanized_name %></td>
+          <td><code><%= ss.source_id %></code></td>
+          <td><%= ss.deleted_reason.presence || "—" %></td>
           <td>
-            <div class="base-name">
-              <% if sync_source && sync_source.display_name.present? %>
-                <%= sync_source.display_name %>
-              <% else %>
-                <%= base["name"] || "Unnamed Base" %>
-              <% end %>
-            </div>
-          </td>
-          <td>
-            <div class="base-id"><%= base["id"] %></div>
-          </td>
-          <td>
-            <% if sync_source %>
-              <% if sync_source.consecutive_failures > 0 %>
-                <span class="status-badge status-error">Error (<%= sync_source.consecutive_failures %>)</span>
-              <% else %>
-                <span class="status-badge status-active">Active</span>
-              <% end %>
+            <% if ss.deleted_at %>
+              <span data-utc-time="<%= ss.deleted_at.iso8601 %>"><%= ss.deleted_at.strftime("%b %d, %Y %I:%M %p %Z") %></span>
             <% else %>
-              <span class="status-badge status-none">No Sync Source</span>
+              —
             <% end %>
-          </td>
-          <td>
-            <% if sync_source&.last_successful_poll_at %>
-              <span data-utc-time="<%= sync_source.last_successful_poll_at.iso8601 %>">
-                <%= sync_source.last_successful_poll_at.strftime("%b %d, %Y %I:%M %p UTC") %>
-              </span>
-            <% else %>
-              <span class="empty">Never</span>
-            <% end %>
-          </td>
-          <td>
-            <% if sync_source&.next_poll_at %>
-              <span data-utc-time="<%= sync_source.next_poll_at.iso8601 %>">
-                <%= sync_source.next_poll_at.strftime("%b %d, %Y %I:%M %p UTC") %>
-              </span>
-            <% else %>
-              <span class="empty">—</span>
-            <% end %>
-          </td>
-          <td>
-            <%= sync_source&.consecutive_failures || 0 %>
           </td>
           <td class="actions">
-            <% if sync_source %>
-              <%= link_to "View", admin_sync_source_path(sync_source) %>
-              <%= link_to "Edit", edit_admin_sync_source_path(sync_source) %>
-              <%= button_to "Delete", admin_sync_source_path(sync_source), 
-                  method: :delete, 
-                  data: { confirm: "Are you sure you want to delete this sync source?" }, 
-                  class: "btn-danger",
-                  style: "display: inline; padding: 0; border: none; background: none; color: #dc3545; text-decoration: underline; cursor: pointer; font-size: 14px; margin-left: 10px;" %>
-            <% else %>
-              <%= link_to "Create", new_admin_sync_source_path(base_id: base["id"]) %>
-            <% end %>
+            <%= button_to "Restore",
+                admin_sync_source_restore_path(ss),
+                method: :post,
+                class: "btn",
+                form: { data: { turbo_confirm: "Restore this sync source?" } },
+                style: "padding: 6px 12px; background-color: #28a745; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;" %>
           </td>
         </tr>
       <% end %>
     </tbody>
   </table>
-<% else %>
-  <p class="empty">No Airtable bases found.</p>
 <% end %>
 
 <script>

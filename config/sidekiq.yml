@@ -38,6 +38,10 @@ queues:
     every: ["1d"]
     class: "PruneAuthenticatedSessionsWorker"
     queue: default
+  discovery_reconciler:
+    every: ["15m"]
+    class: "DiscoveryReconcilerWorker"
+    queue: scheduler
 
 production:
   concurrency: 64
