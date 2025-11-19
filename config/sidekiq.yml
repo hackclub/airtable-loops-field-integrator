@@ -39,7 +39,7 @@ queues:
     class: "PruneAuthenticatedSessionsWorker"
     queue: default
   discovery_reconciler:
-    every: ["15m"]
+    every: ["1m"]
     class: "DiscoveryReconcilerWorker"
     queue: scheduler
 
